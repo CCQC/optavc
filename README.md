@@ -1,4 +1,4 @@
-# Optavc
+# optavc
 
 In order to run this, you must have Psi4 installed as an importable Python
 module.  Instructions can be found on the Psi4 wiki page
