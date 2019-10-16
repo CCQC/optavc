@@ -1,0 +1,66 @@
+import os
+import psi4
+import numpy as np
+from .singlepoint import SinglePoint
+
+class Hessian(object):
+
+  def __init__(self, molecule, inp_file_obj, options, path="."):
+    self.molecule     = molecule
+    self.inp_file_obj = inp_file_obj
+    self.options      = options
+    self.path         = os.path.abspath(path)
+    self.singlepoints = []
+    for disp_num, disp in enumerate(psi4.core.fd_geoms_freq_0(self.molecule.cast_to_psi4_molecule_object(), -1)):
+      disp_molecule = self.molecule.copy()
+      disp_molecule.set_geometry(np.array(disp), geom_units="bohr")
+      disp_path = os.path.join(self.path, "{:d}".format(disp_num+1))
+      disp_singlepoint = SinglePoint(disp_molecule, self.inp_file_obj, self.options, path=disp_path)
+      self.singlepoints.append(disp_singlepoint)
+    self.ndisps = len(self.singlepoints)
+
+  def get_hessian(self):
+    try:    return self.hessian
+    except: raise Exception("Hessian is not yet defined -- did you remember to run compute_hessian() first?")
+
+  def get_reference_energy(self):
+    try:    return self.energies[-1]
+    except: raise Exception("Energy not yet computed -- did you remember to run compute_hessian() first?")
+
+  def sow(self):
+    for singlepoint in self.singlepoints:
+      singlepoint.write_input()
+
+  def reap(self):
+    return [singlepoint.get_energy_from_output() for singlepoint in self.singlepoints]
+
+  def run_individual(self):
+    for singlepoint in self.singlepoints:
+      singlepoint.run()
+
+  def run(self):
+    if not self.options.job_array:
+      self.run_individual()
+    else:
+      self.options.job_array_range = (1, self.ndisps)
+      working_directory = os.getcwd()
+      os.chdir(self.path)
+      self.options.submitter(self.options)
+      os.chdir(working_directory)
+    
+  def compute_hessian(self, sow=True):
+    if sow:
+      self.sow()
+      self.run()
+    self.energies = self.reap()
+    psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+    self.hessian = psi4.core.fd_freq_0(psi4_mol_obj, self.energies, -1)
+    # Could we get the global_option basis? Yes.
+    # Would we need to set it, just for this? Yes.
+    # Does it mean anything. No, not with our application.
+    wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
+    wfn.set_hessian(self.hessian)
+    psi4.driver.vibanal_wfn(wfn)
+    psi4.driver._hessian_write(wfn)
+    return self.hessian
+

@@ -1,0 +1,58 @@
+import os
+import psi4
+import numpy as np
+from .singlepoint import SinglePoint
+
+class Gradient(object):
+
+  def __init__(self, molecule, inp_file_obj, options, path="."):
+    self.molecule     = molecule
+    self.inp_file_obj = inp_file_obj
+    self.options      = options
+    self.path         = os.path.abspath(path)
+    self.singlepoints = []
+    for disp_num, disp in enumerate(psi4.core.fd_geoms_1_0(self.molecule.cast_to_psi4_molecule_object())):
+      disp_molecule = self.molecule.copy()
+      disp_molecule.set_geometry(np.array(disp), geom_units="bohr")
+      disp_path = os.path.join(self.path, "{:d}".format(disp_num+1))
+      disp_singlepoint = SinglePoint(disp_molecule, self.inp_file_obj, self.options, path=disp_path)
+      self.singlepoints.append(disp_singlepoint)
+    self.ndisps = len(self.singlepoints)
+
+  def get_gradient(self):
+    try:    return self.gradient
+    except: raise Exception("Gradient is not yet defined -- did you remember to run compute_gradient() first?")
+
+  def get_reference_energy(self):
+    try:    return self.energies[-1]
+    except: raise Exception("Energy not yet computed -- did you remember to run compute_gradient() first?")
+
+  def sow(self):
+    for singlepoint in self.singlepoints:
+      singlepoint.write_input()
+
+  def reap(self):
+    self.energies = [singlepoint.get_energy_from_output() for singlepoint in self.singlepoints]
+    psi4_mol_obj  = self.molecule.cast_to_psi4_molecule_object()
+    self.gradient = psi4.core.fd_1_0(psi4_mol_obj, self.energies) # note -- this is a psi4.Matrix: you can cast it to a numpy array as np.array(self.gradient),
+    return self.gradient                                     # but then there's no way to feed it back to psi4
+
+  def run_individual(self):
+    for singlepoint in self.singlepoints:
+      singlepoint.run()
+
+  def run(self):
+    if not self.options.job_array:
+      self.run_individual()
+    else:
+      self.options.job_array_range = (1, self.ndisps)
+      working_directory = os.getcwd()
+      os.chdir(self.path)
+      self.options.submitter(self.options)
+      os.chdir(working_directory)
+    
+  def compute_gradient(self):
+    self.sow()
+    self.run()
+    return self.reap()
+
