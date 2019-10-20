@@ -1,7 +1,6 @@
 import os
 import psi4
 import numpy as np
-#import dask_iface
 from .dask_iface import run_parallel as rp
 from .mpi4py_iface import master,to_dict,compute
 from .singlepoint import SinglePoint
@@ -92,22 +91,16 @@ class Gradient(object):
         self.gradient = psi4.core.Matrix.from_array(
             self.gradient)  #convert from numpy array to matrix
         return self.gradient
-    def run_mpi(self):
-        pass
-    def run_parallel(self):
-        """
-        I think this is where the dask scheduler should be interacted with"""
-        pass
 
     def run_individual(self):
         for singlepoint in self.singlepoints:
             singlepoint.run()
 
     def run(self):
-        if False: #self.options.dask:
-            energies = rp(self.singlepoints,self.options.client)
-            self.energies = energies
-        elif self.options.mpi:
+        #if False: #self.options.dask: the dask interface doesn't workh
+        #    energies = rp(self.singlepoints,self.options.client)
+        #    self.energies = energies
+        if self.options.mpi: #compute in MPI mode
             _singlepoints = to_dict(self.singlepoints)
             print('sending energies for gradient ...')
             self.energies = master(_singlepoints,compute)
