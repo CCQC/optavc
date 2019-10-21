@@ -27,16 +27,19 @@ def master(wi,func):
         anext = current_work.get_next_item()
         if not anext: break
         COMM.send(obj=anext, dest=i, tag=WORKTAG)
-    while 1:
+    while True:
         print('receiving data ...')
         anext = current_work.get_next_item()
         if not anext: break
-        #data = COMM.recv(obj=None, source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
         data = COMM.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
         all_data.append(data)
         COMM.send(obj=anext, dest=status.Get_source(), tag=WORKTAG)
     for i in range(1,size):
-        data = COMM.recv( source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG)
+        data = COMM.recv( source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+        if status.Get_tag():
+            print('OPTAVC+mpi@MASTER: error found - slaying all workers')
+            slay()
+            exit()
         all_data.append(data)
     print('all data collected')
     return all_data
@@ -57,7 +60,12 @@ def worker(do_work):
         data = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
         print('got work!')
         if status.Get_tag(): break
-        comm.send(obj=do_work(data), dest=0)
+        odata = do_work(data)
+        if odata[0] == 1:
+            otag = DIETAG
+        else:
+            otag = WORKTAG
+        comm.send(obj=do_work(data), tag=otag, dest=0)
         
 class Work():
     def __init__(self, work_items):
@@ -67,6 +75,7 @@ class Work():
         if len(self.work_items) == 0:
             return None
         return self.work_items.pop()
+    
 def slay():
     size = MPI.COMM_WORLD.Get_size()
     if COMM.rank == 0:
@@ -109,23 +118,15 @@ def compute(_singlepoint):
     """
     wd = os.getcwd()
     os.chdir(_singlepoint['path'])
-    #mpi_print_out('Worker {} in {}'.format(COMM.rank, os.getcwd()))
-    #mpi_print_out('Worker {} executing {} in {}...'.format(COMM.rank, \
-                  # _singlepoint['options']['command']),os.getcwd())
-    #TODO: replace os.system call with something safer
     os.system(_singlepoint['options']['command'])
-    #mpi_print_out('Worker {} finished execution of {} in...'.format(COMM.rank, _singlepoint['options']['command']))
     os.chdir(wd)
     fname = _singlepoint['path']+'/'+_singlepoint['options']['output_name']
-    #mpi_print_out('Worker {} looking for energy in {}'.format(COMM.rank, fname))
-    
     with open(_singlepoint['path']+'/'+_singlepoint['options']['output_name'], 'r') as f: cont = f.read()
     if re.search(_singlepoint['options']['energy_regex'],cont):
         e = re.findall(_singlepoint['options']['energy_regex'],cont)[-1]
-        #mpi_print_out('Worker {} successfully found energy in {}'.format(COMM.rank, fname))
     else:
         print('regex failed')
-    #print(e)
+        e = 1
     return (e,_singlepoint['index'])
     
 def to_dict(singlepoints):
