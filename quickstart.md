@@ -56,7 +56,7 @@ $ tar zxvf mpi4py-3.0.0.tar.gz
 $ cd mpi4py-3.0.0
 $ module swap PrgEnv-intel PrgEnv-gnu
 $ module unload craype-hugepages2M
-$ python setup.py build --mpicc="$(which cc) - shared"
+$ python setup.py build --mpicc="$(which cc) -shared"
 $ python setup.py install
 ```
 
