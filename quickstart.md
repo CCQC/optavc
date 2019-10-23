@@ -1,6 +1,6 @@
 # optavc+mpi quickstart
 
-optavc+mpi is an extension of optavc that modifies how optavc interacts with the queue. Rather than queuing each singlepoint, the whole optavc process is placed in the queue, for a requested $N$ nodes. Once these are allocated, optavc+mpi launches with $n$ MPI processes. One of these runs the optimizer, and the rest compute singlepoint energies. 
+optavc+mpi is an extension of optavc that modifies how optavc interacts with the queue. Rather than queuing each singlepoint, the whole optavc process is placed in the queue, for a requested N nodes. Once these are allocated, optavc+mpi launches with n MPI processes. One of these runs the optimizer, and the rest compute singlepoint energies. 
 
 ## Installing optavc+mpi
 The easiest way to get this working is to have your own copy of optavc, and a conda
@@ -130,7 +130,7 @@ module load qchem
 srun -n nprocs -c ncores python -u main.py &
 wait
 ```
-Make sure to replace `NNODES` with the number of nodes you want, `nprocs` with the number of MPI processes you want to run, and `-ncores` with the number of logical cores you want to allocate to each process. Note that this overdetermines the job allocation requirements, as 64$*$`NNODES`$\leq$ `nprocs`$*$`ncores`
+Make sure to replace `NNODES` with the number of nodes you want, `nprocs` with the number of MPI processes you want to run, and `-ncores` with the number of logical cores you want to allocate to each process. Note that this overdetermines the job allocation requirements, as 64*`NNODES`$ <= `nprocs`*`ncores`
 
 Also, be sure to replace `module load qchem` with the appropriate module for your job. 
 
