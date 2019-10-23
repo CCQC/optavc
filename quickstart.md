@@ -12,9 +12,11 @@ To do this, go into your `~/.bashrc.ext` and `~/.bash_profile.ext` and remove li
 Next, create a conda environment for `psi4`. Do the following (`$` indicates using the terminal) :
 
 ```
+$ module load python/3.7-anaconda-2019.07
 $ conda create -n optavc+mpi python=3.7 psi4 -c psi4
 ```
-That creates the conda environment and installs `psi4` while we're at it.
+That first line makes `conda` visible to you, and the latter 
+creates the conda environment and installs `psi4` while we're at it.
 To make sure everything is groovy at this point, enter that conda environment with:
 ```
 $ source activate optavc+mpi
