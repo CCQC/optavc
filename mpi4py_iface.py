@@ -20,6 +20,7 @@ def master(wi,func):
     """
     all_data = []
     size = MPI.COMM_WORLD.Get_size()
+    work_size = len(wi)
     current_work = Work(wi)
     COMM = MPI.COMM_WORLD
     status = MPI.Status()
@@ -27,7 +28,7 @@ def master(wi,func):
         anext = current_work.get_next_item()
         if not anext: break
         COMM.send(obj=anext, dest=i, tag=WORKTAG)
-    while 1:
+    while True:
         print('receiving data ...')
         anext = current_work.get_next_item()
         if not anext: break
@@ -35,8 +36,8 @@ def master(wi,func):
         data = COMM.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
         all_data.append(data)
         COMM.send(obj=anext, dest=status.Get_source(), tag=WORKTAG)
-    for i in range(1,size):
-        data = COMM.recv( source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG)
+    while len(all_data) < work_size:
+        data = COMM.recv(source=MPI.ANY_SOURCE,tag=MPI.ANY_TAG)
         all_data.append(data)
     print('all data collected')
     return all_data
