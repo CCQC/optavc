@@ -97,9 +97,8 @@ options_kwargs = {
  'maxiter'           : 20,
  'findif'            : {'points': 3}, #set to 5 if you want slightly better frequencies
  'optking'           : {'max_force_g_convergence': 1e-7, #tighter than this is not recommended
-                              'rms_force_g_convergence': 1e-7,
-                       }
-                       
+                              'rms_force_g_convergence': 1e-7}
+}
 options_obj = Options(**options_kwargs)
 mpirun(options_obj)
 ```
