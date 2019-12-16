@@ -123,7 +123,7 @@ This file is used to reserve a certain number of nodes for a given period of tim
 #SBATCH --time=00:30:00
 
 module load python/3.7-anaconda-2019.07
-source activate psi4
+source activate <name-of-psi4-conda-env>
 module load qchem
 
 srun -n nprocs -c ncores python -u main.py &
