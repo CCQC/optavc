@@ -4,6 +4,7 @@ from .molecule import Molecule
 from .gradient import Gradient
 from .mpi4py_iface import slay
 
+
 class Optimization(object):
     def __init__(self, options):
         template_file_string = open(options.template_file_path).read()
@@ -20,10 +21,11 @@ class Optimization(object):
             self.step_molecules.append(self.reference_molecule)
             # compute the gradient for the current molecule -- the path for gradient computation is set to "STEP0x"
             step_path = "STEP{:>02d}".format(iteration)
-            grad_obj = Gradient(self.reference_molecule,
-                                self.inp_file_obj,
-                                self.options,
-                                path=step_path)
+            grad_obj = Gradient(
+                self.reference_molecule,
+                self.inp_file_obj,
+                self.options,
+                path=step_path)
             if iteration >= restart_iteration:
                 grad_obj.sow()
                 grad_obj.run()
@@ -50,5 +52,4 @@ class Optimization(object):
             psi4.core.set_local_option('OPTKING', 'CART_HESS_READ', False)
         psi4.core.set_legacy_molecule(None)
         if self.options.mpi:
-            slay() #kill all workers before exiting
-        
+            slay()  #kill all workers before exiting

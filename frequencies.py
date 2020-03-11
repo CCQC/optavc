@@ -16,10 +16,11 @@ class Frequencies(object):
         self.step_molecules = []
 
     def run(self, sow=True):
-        hess_obj = Hessian(self.reference_molecule,
-                           self.inp_file_obj,
-                           self.options,
-                           path="HESS")
+        hess_obj = Hessian(
+            self.reference_molecule,
+            self.inp_file_obj,
+            self.options,
+            path="HESS")
         hess_obj.compute_hessian(sow=sow)
 
 
@@ -41,10 +42,11 @@ class Frequencies(object):
         self.step_molecules = []
 
     def run(self, sow=True):
-        hess_obj = Hessian(self.reference_molecule,
-                           self.inp_file_obj,
-                           self.options,
-                           path="HESS")
+        hess_obj = Hessian(
+            self.reference_molecule,
+            self.inp_file_obj,
+            self.options,
+            path="HESS")
         hess_obj.compute_hessian(sow=sow)
 
 
@@ -66,9 +68,9 @@ class Frequencies(object):
         self.step_molecules = []
 
     def run(self, sow=True):
-        hess_obj = Hessian(self.reference_molecule,
-                           self.inp_file_obj,
-                           self.options,
-                           path="HESS")
+        hess_obj = Hessian(
+            self.reference_molecule,
+            self.inp_file_obj,
+            self.options,
+            path="HESS")
         hess_obj.compute_hessian(sow=sow)
-

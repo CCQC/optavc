@@ -18,10 +18,8 @@ class Hessian(object):
             disp_molecule = self.molecule.copy()
             disp_molecule.set_geometry(np.array(disp), geom_units="bohr")
             disp_path = os.path.join(self.path, "{:d}".format(disp_num + 1))
-            disp_singlepoint = SinglePoint(disp_molecule,
-                                           self.inp_file_obj,
-                                           self.options,
-                                           path=disp_path)
+            disp_singlepoint = SinglePoint(
+                disp_molecule, self.inp_file_obj, self.options, path=disp_path)
             self.singlepoints.append(disp_singlepoint)
         self.ndisps = len(self.singlepoints)
 
@@ -82,6 +80,3 @@ class Hessian(object):
         psi4.driver.vibanal_wfn(wfn)
         psi4.driver._hessian_write(wfn)
         return self.hessian
-
-
-

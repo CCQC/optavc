@@ -2,6 +2,8 @@ import psi4
 import os
 #from .dask_iface import connect_Client
 from .mpi4py_iface import compute
+
+
 class Options(object):
     def __init__(self,
                  template_file_path="template.dat",
@@ -63,4 +65,3 @@ class Options(object):
                         .format(key, str(value)))
             else:
                 raise Exception("Unrecognized keyword {:s}".format(str(key)))
-
