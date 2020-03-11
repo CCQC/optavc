@@ -97,9 +97,8 @@ options_kwargs = {
  'maxiter'           : 20,
  'findif'            : {'points': 3}, #set to 5 if you want slightly better frequencies
  'optking'           : {'max_force_g_convergence': 1e-7, #tighter than this is not recommended
-                              'rms_force_g_convergence': 1e-7,
-                       }
-                       
+                              'rms_force_g_convergence': 1e-7}
+}
 options_obj = Options(**options_kwargs)
 mpirun(options_obj)
 ```
@@ -124,7 +123,7 @@ This file is used to reserve a certain number of nodes for a given period of tim
 #SBATCH --time=00:30:00
 
 module load python/3.7-anaconda-2019.07
-source activate psi4
+source activate <name-of-psi4-conda-env>
 module load qchem
 
 srun -n nprocs -c ncores python -u main.py &
