@@ -109,15 +109,16 @@ class Executable(object):
 
         # if they just want to ignore one error code, make it a tuple.
         if isinstance(ignore_errors, int):
-            ignore_errors = (ignore_errors,)
+            ignore_errors = (ignore_errors, )
 
         quoted_args = [arg for arg in args if re.search(r'^"|^\'|"$|\'$', arg)]
         if quoted_args:
-            print("Quotes in command arguments can confuse scripts like configure.",
-                     "The following arguments may cause problems when executed:",
-                     str("\n".join(["    " + arg for arg in quoted_args])),
-                     "Quotes aren't needed because vulcan doesn't use a shell.",
-                     "Consider removing them")
+            print(
+                "Quotes in command arguments can confuse scripts like configure.",
+                "The following arguments may cause problems when executed:",
+                str("\n".join(["    " + arg for arg in quoted_args])),
+                "Quotes aren't needed because vulcan doesn't use a shell.",
+                "Consider removing them")
 
         cmd = self.exe + list(args)
 
@@ -126,31 +127,34 @@ class Executable(object):
 
         try:
             proc = subprocess.Popen(
-                cmd, stdin=istream, stderr=estream, stdout=ostream, env=environ)
+                cmd,
+                stdin=istream,
+                stderr=estream,
+                stdout=ostream,
+                env=environ)
             out, err = proc.communicate()
 
             rc = self.returncode = proc.returncode
             if fail_on_error and rc != 0 and (rc not in ignore_errors):
-                raise RuntimeError("Command exited with status %d:"
-                                   % proc.returncode, cmd_line)
+                raise RuntimeError(
+                    "Command exited with status %d:" % proc.returncode,
+                    cmd_line)
 
             if output is str or error is str:
                 result = ''
-                if output is str: result += out.decode("utf-8") 
-                if error is str:  result += err.decode("utf-8") 
+                if output is str: result += out.decode("utf-8")
+                if error is str: result += err.decode("utf-8")
                 return result
 
         except OSError as e:
-            raise RuntimeError(
-                "%s: %s" % (self.exe[0], e.strerror),
-                "Command: " + cmd_line)
+            raise RuntimeError("%s: %s" % (self.exe[0], e.strerror),
+                               "Command: " + cmd_line)
 
         except subprocess.CalledProcessError as e:
             if fail_on_error:
                 raise RuntimeError(
-                    str(e),
-                    "\nExit status %d when invoking command: %s"
-                    % (proc.returncode, cmd_line))
+                    str(e), "\nExit status %d when invoking command: %s" %
+                    (proc.returncode, cmd_line))
 
         finally:
             if close_ostream: output.close()
@@ -164,7 +168,7 @@ class Executable(object):
         return not (self == other)
 
     def __hash__(self):
-        return hash((type(self),) + tuple(self.exe))
+        return hash((type(self), ) + tuple(self.exe))
 
     def __repr__(self):
         return "<exe: %s>" % self.exe
@@ -192,6 +196,7 @@ def which(name, **kwargs):
 
     return None
 
+
 if __name__ == "__main__":
 
     print(which("ls"))
@@ -202,4 +207,3 @@ if __name__ == "__main__":
 
     #vulcan = Executable("/opt/vulcan/bin/vulcan")
     #vulcan('submit','-h')
-

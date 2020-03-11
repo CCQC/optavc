@@ -3,23 +3,27 @@ import os
 from subprocess import call
 import sys
 
-keywords = {"--N":"nnode",
-            "--n":"nproc",
-            "--c":"ncore",
-            "--program":"program",
-            "--t":"time",
-            "--q":"queue",
-            "--h":"hold",
-            "--m":"memory"}
+keywords = {
+    "--N": "nnode",
+    "--n": "nproc",
+    "--c": "ncore",
+    "--program": "program",
+    "--t": "time",
+    "--q": "queue",
+    "--h": "hold",
+    "--m": "memory"
+}
 
-settings = {"nnode":None,
-            "nproc":None,
-            "ncore":None,
-            "program":None,
-            "time":"48:00:00",
-            "queue":"regular",
-            "hold":False,
-            "memory":None}
+settings = {
+    "nnode": None,
+    "nproc": None,
+    "ncore": None,
+    "program": None,
+    "time": "48:00:00",
+    "queue": "regular",
+    "hold": False,
+    "memory": None
+}
 
 for arg in sys.argv[1:]:
     assert "=" in arg
@@ -27,10 +31,10 @@ for arg in sys.argv[1:]:
     print(sarg)
     if sarg[0] in keywords:
         settings[keywords[sarg[0]]] = sarg[1]
-    
+
 if settings["program"] is None:
     print("program not set -- can't continue :(")
-    
+
 summ = 0
 for i in settings:
     if settings[i] is None:
@@ -43,7 +47,7 @@ if summ > 0:
     settings["hold"] = True
     #exit()
 #if (summ <= 2) and (summ > 0):
-  #  return
+#  return
 
 #print(summ)
 template = """#!/bin/bash
@@ -58,6 +62,7 @@ srun -n {nproc} -c {ncore} python -u main.py
 wait
 """
 
-with open("submit.sh","w") as f: f.write(template.format(**settings))
+with open("submit.sh", "w") as f:
+    f.write(template.format(**settings))
 if not settings["hold"]:
-    call("sbatch submit.sh",shell=True)
+    call("sbatch submit.sh", shell=True)

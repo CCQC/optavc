@@ -82,5 +82,3 @@ class Molecule(object):
         mol = psi4.core.Molecule.from_string(str(self))
         mol.update_geometry()
         return mol
-
-

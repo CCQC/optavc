@@ -3,7 +3,6 @@ import re
 import shutil
 
 
-
 class SinglePoint(object):
     def __init__(self, molecule, inp_file_obj, options, path=".", key=None):
         self.molecule = molecule
@@ -12,6 +11,7 @@ class SinglePoint(object):
         self.path = os.path.abspath(path)
         self.key = key
         self.dict = {}
+
     def to_dict(self):
         self.dict['path'] = self.path
         self.dict['options'] = {}
@@ -20,11 +20,13 @@ class SinglePoint(object):
         #self.dict['options']['prep_cmd'] = self.options.prep_cmd
         self.dict['options']['output_name'] = self.options.output_name
         self.dict['options']['energy_regex'] = self.options.energy_regex
-        self.dict['options']['correction_regexes'] = self.options.correction_regexes
+        self.dict['options'][
+            'correction_regexes'] = self.options.correction_regexes
         self.dict['options']['success_regex'] = self.options.success_regex
         self.dict['options']['fail_regex'] = self.options.fail_regex
         self.dict['path'] = self.path
         return self.dict
+
     def write_input(self):
         if not os.path.exists(self.path):
             os.makedirs(self.path)
@@ -60,5 +62,3 @@ class SinglePoint(object):
         else:
             raise Exception(
                 "SinglePoint job at {:s} failed.".format(output_path))
-
-    

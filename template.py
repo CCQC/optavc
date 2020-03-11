@@ -9,6 +9,7 @@ class InputFile(object):
   A formatable template for an input file that can place coordinates in the
   proper location in the input file.
   """
+
     def __init__(self, header, footer, body_template):
         self.header = header
         self.footer = footer
@@ -30,6 +31,7 @@ class TemplateFileProcessor(object):
   the corresponding InputFile and Molecule objects, which are saved as class
   attributes.
   """
+
     def __init__(self, file_string, options):
         """
     :param file_string: a string of the template file
@@ -62,8 +64,8 @@ class TemplateFileProcessor(object):
 
             header = ''
             footer = ''
-            body_str = '{ "bagel" : ' + json.dumps(jinp['bagel'],
-                                                   indent=4) + '}'
+            body_str = '{ "bagel" : ' + json.dumps(
+                jinp['bagel'], indent=4) + '}'
             body_template = body_str.replace('{', '{{').replace(
                 '}', '}}').replace('"' + placeholder + '"',
                                    '[{:> 17.12f}, {:> 17.12f}, {:> 17.12f}]')
@@ -102,5 +104,3 @@ class TemplateFileProcessor(object):
 
         self.molecule = Molecule(xyzstring)
         self.input_file_object = InputFile(header, footer, body_template)
-
-

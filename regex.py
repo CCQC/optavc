@@ -79,6 +79,3 @@ class BagelRegex:
        - MRCI+Q energy evaluation                  0.00
     """
     mrci = r"- MRCI energy evaluation\s+\d+\.\d+\n\n\s+0   0\s+(-\d+\.\d+)\s+\d+\.\d+\s+\d+\.\d+"
-
-
-
