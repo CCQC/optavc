@@ -1,7 +1,7 @@
 from mpi4py import MPI
 import os
 import re
-from .dask_iface import get_energy_from_output
+#from .dask_iface import get_energy_from_output
 #from .mpi4py_iface import compute,worker
 from .executable import Executable, which
 COMM = MPI.COMM_WORLD
@@ -185,3 +185,25 @@ def hopper(flist, N=None, func=None, client=None):
         result = client2.gather(result)
         outlist += result
     return outlist
+
+
+def get_energy_from_output(_singlepoint):
+    output_path = os.path.join(_singlepoint['path'],
+                               _singlepoint['options']['output_name'])
+    print(output_path)
+    output_text = open(output_path).read()
+    if re.search(_singlepoint['options']['energy_regex'], output_text):
+        try:
+            get_last_energy = lambda regex: float(
+                re.findall(regex, output_text)[-1])
+            energy = get_last_energy(_singlepoint['options']['energy_regex'])
+            correction = sum(
+                get_last_energy(correction_regex) for correction_regex in
+                _singlepoint['options']['correction_regexes'])
+            return energy + correction
+        except:
+            raise Exception(
+                "Could not find energy in {:s}.".format(output_path))
+    else:
+        print('regex not found - in optavc.dask_iface')
+        raise Exception("SinglePoint job at {:s} failed.".format(output_path))
