@@ -21,6 +21,7 @@ def master(wi, func):
     """
     all_data = []
     size = MPI.COMM_WORLD.Get_size()
+    work_size = len(wi)
     current_work = Work(wi)
     COMM = MPI.COMM_WORLD
     status = MPI.Status()
@@ -33,6 +34,10 @@ def master(wi, func):
         anext = current_work.get_next_item()
         if not anext: break
         data = COMM.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+        if status.Get_tag():
+            print('OPTAVC+mpi@MASTER: error found - slaying all workers')
+            slay()
+            exit()
         all_data.append(data)
         COMM.send(obj=anext, dest=status.Get_source(), tag=WORKTAG)
     for i in range(1, size):
