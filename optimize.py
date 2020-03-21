@@ -38,8 +38,10 @@ class Optimization(object):
             psi4.core.set_gradient(grad)
             psi4.core.set_variable('CURRENT ENERGY',
                                    grad_obj.get_reference_energy())
-            psi4.core.set_legacy_molecule(
-                self.reference_molecule.cast_to_psi4_molecule_object())
+            psi4_mol_obj = self.reference_molecule.cast_to_psi4_molecule_object()
+            if self.options.point_group is not None: #otherwise autodetect
+            	psi4_mol_obj.reset_point_group(self.options.point_group)
+            psi4.core.set_legacy_molecule(psi4_mol_obj)
             optking_exit_code = psi4.core.optking()
             # optking has put the next step geometry in psi::Environment, so we can grab a copy and cast it from psi4.Molecule() to Molecule()
             self.reference_molecule = Molecule(psi4.core.get_legacy_molecule())

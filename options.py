@@ -18,11 +18,13 @@ class Options(object):
                  files_to_copy=[],
                  output_name="output.dat",
                  input_units="angstrom",
+                 point_group=None,
                  submitter=lambda options: None,
                  maxiter=20,
                  job_array=False,
                  mpi=None,
                  queue="",
+                 nslots=4,
                  **psi4kwargs):
         self.template_file_path = template_file_path
         self.energy_regex = energy_regex
@@ -34,11 +36,13 @@ class Options(object):
         self.files_to_copy = files_to_copy
         self.output_name = output_name
         self.input_units = input_units
+        self.point_group = point_group
         self.submitter = submitter
         self.maxiter = maxiter
         self.mpi = mpi
         self.job_array = job_array
         self.queue = queue
+        self.nslots = nslots
         self.job_array_range = None  # needs to be set by calling function
         if mpi is not None:
             self.command = command
