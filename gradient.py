@@ -1,7 +1,7 @@
 import os
 import psi4
 import numpy as np
-from .dask_iface import run_parallel as rp
+#from .dask_iface import run_parallel as rp
 from .mpi4py_iface import master, to_dict, compute
 from .singlepoint import SinglePoint
 
@@ -14,6 +14,8 @@ class Gradient(object):
         self.path = os.path.abspath(path)
         self.singlepoints = []
         psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+        if self.options.point_group is not None:
+            psi4_mol_obj.reset_point_group(self.options.point_group)
         self.findifrec = psi4.driver_findif.gradient_from_energy_geometries(
             psi4_mol_obj)
         ref_molecule = self.molecule.copy()
@@ -51,14 +53,13 @@ class Gradient(object):
 
     def get_reference_energy(self):
         try:
-            return self.energies[0]
+            return self.findifrec['reference']['energy']
         except:
             raise Exception(
                 "Energy not yet computed -- did you remember to run compute_gradient() first?"
             )
 
     def sow(self):
-        print('sowing')
         for singlepoint in self.singlepoints:
             singlepoint.write_input()
 
@@ -85,7 +86,6 @@ class Gradient(object):
                 else:
                     self.findifrec['displacements'][key][
                         'energy'] = e.get_energy_from_output()
-        print('got to l77')
         psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         self.gradient = psi4.driver.driver_findif.compute_gradient_from_energies(
             self.findifrec)
@@ -104,7 +104,6 @@ class Gradient(object):
         #    self.energies = energies
         if self.options.mpi:  #compute in MPI mode
             _singlepoints = to_dict(self.singlepoints)
-            print('sending energies for gradient ...')
             self.energies = master(_singlepoints, compute)
             self.energies = [
                 float(val[0])
