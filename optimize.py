@@ -2,7 +2,6 @@ import psi4
 from .template import TemplateFileProcessor
 from .molecule import Molecule
 from .gradient import Gradient
-from .mpi4py_iface import slay
 
 
 class Optimization(object):
@@ -54,4 +53,5 @@ class Optimization(object):
             psi4.core.set_local_option('OPTKING', 'CART_HESS_READ', False)
         psi4.core.set_legacy_molecule(None)
         if self.options.mpi:
+            from .mpi4py_iface import slay
             slay()  #kill all workers before exiting

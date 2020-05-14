@@ -2,7 +2,6 @@ import os
 import psi4
 import numpy as np
 #from .dask_iface import run_parallel as rp
-from .mpi4py_iface import master, to_dict, compute
 from .singlepoint import SinglePoint
 
 
@@ -103,6 +102,7 @@ class Gradient(object):
         #    energies = rp(self.singlepoints,self.options.client)
         #    self.energies = energies
         if self.options.mpi:  #compute in MPI mode
+            from .mpi4py_iface import master, to_dict, compute
             _singlepoints = to_dict(self.singlepoints)
             self.energies = master(_singlepoints, compute)
             self.energies = [

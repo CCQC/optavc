@@ -1,7 +1,6 @@
 import psi4
 import os
 #from .dask_iface import connect_Client
-from .mpi4py_iface import compute
 
 
 class Options(object):
@@ -25,12 +24,18 @@ class Options(object):
                  mpi=None,
                  queue="",
                  nslots=4,
+                 email=None,
+                 email_opts='ae',
+                 memory="",
+                 cluster="",
+                 name="",
                  **psi4kwargs):
         self.template_file_path = template_file_path
         self.energy_regex = energy_regex
         self.correction_regexes = correction_regexes
         self.success_regex = success_regex
         self.fail_regex = fail_regex
+        self.time_limit = time_limit
         self.program = program
         self.input_name = input_name
         self.files_to_copy = files_to_copy
@@ -44,7 +49,13 @@ class Options(object):
         self.queue = queue
         self.nslots = nslots
         self.job_array_range = None  # needs to be set by calling function
+        self.email = email
+        self.email_opts = email_opts
+        self.memory = memory
+        self.cluster = cluster
+        self.name = name
         if mpi is not None:
+            from .mpi4py import compute
             self.command = command
             #self.submitter = compute
         for key, value in psi4kwargs.items():
