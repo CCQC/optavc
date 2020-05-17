@@ -17,9 +17,9 @@ class SinglePoint(object):
     def to_dict(self):
         self.dict['path'] = self.path
         self.dict['options'] = {}
-        #for i in self.options:
+        # for i in self.options:
         self.dict['options']['command'] = self.options.command
-        #self.dict['options']['prep_cmd'] = self.options.prep_cmd
+        # self.dict['options']['prep_cmd'] = self.options.prep_cmd
         self.dict['options']['output_name'] = self.options.output_name
         self.dict['options']['energy_regex'] = self.options.energy_regex
         self.dict['options'][
@@ -46,21 +46,29 @@ class SinglePoint(object):
         self.submitter(self.options)
         os.chdir(working_directory)
 
-    def get_energy_from_output(self):
+    def get_energy_from_output(self) -> list:
         output_path = os.path.join(self.path, self.options.output_name)
         output_text = open(output_path).read()
+
+        energy = []
         if re.search(self.options.success_regex, output_text):
-            try:
-                get_last_energy = lambda regex: float(
-                    re.findall(regex, output_text)[-1])
-                energy = get_last_energy(self.options.energy_regex)
-                correction = sum(
-                    get_last_energy(correction_regex)
-                    for correction_regex in self.options.correction_regexes)
-                return energy + correction
-            except:
-                raise Exception(
-                    "Could not find energy in {:s}.".format(output_path))
+            for energy_str in self.options.energy_regex:
+                energy.append(get_last_energy(energy_str, output_path, output_text))
+
+            correction = sum(get_last_energy(correction_regex, output_path, output_text)
+                             for correction_regex in self.options.correction_regexes)
+
+            if correction != 0 and len(energy) > 1:
+                raise ValueError("Cannot currently use extrapolation and correction features simultaneously")
+            else:
+                return [correction + e for e in energy]  # correction is zero can safely add
         else:
-            raise Exception(
-                "SinglePoint job at {:s} failed.".format(output_path))
+            raise RuntimeError("SinglePoint job at {:s} failed.".format(output_path))
+
+
+def get_last_energy(regex_str, output_path, output_text):
+    try:
+        return float(re.findall(regex_str, output_text)[-1])
+    except ValueError:
+        raise ValueError(
+            "Could not find energy in {:s}.".format(output_path))
