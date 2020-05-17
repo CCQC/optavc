@@ -4,12 +4,14 @@ import shutil
 
 
 class SinglePoint(object):
-    def __init__(self, molecule, inp_file_obj, options, path=".", key=None):
+    def __init__(self, molecule, inp_file_obj, options, submitter, path=".", key=None):
         self.molecule = molecule
         self.inp_file_obj = inp_file_obj
         self.options = options
+        self.submitter = submitter
         self.path = os.path.abspath(path)
         self.key = key
+        self.submitter=submitter
         self.dict = {}
 
     def to_dict(self):
@@ -41,7 +43,7 @@ class SinglePoint(object):
     def run(self):
         working_directory = os.getcwd()
         os.chdir(self.path)
-        self.options.submitter(self.options)
+        self.submitter(self.options)
         os.chdir(working_directory)
 
     def get_energy_from_output(self):
