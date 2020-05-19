@@ -5,12 +5,11 @@ from .singlepoint import SinglePoint
 
 
 class Hessian(object):
-    def __init__(self, molecule, inp_file_obj, options, submitter, path="."):
+    def __init__(self, molecule, inp_file_obj, options, path="."):
         self.molecule = molecule
         self.inp_file_obj = inp_file_obj
         self.options = options
         self.path = os.path.abspath(path)
-        self.submitter = submitter
         self.singlepoints = []
         psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         if self.options.point_group is not None:
@@ -23,7 +22,6 @@ class Hessian(object):
             ref_molecule,
             self.inp_file_obj,
             self.options,
-            submitter=self.submitter,
             path=ref_path,
             key='reference')
         self.singlepoints.append(ref_singlepoint)
@@ -38,7 +36,6 @@ class Hessian(object):
                 disp_molecule,
                 self.inp_file_obj,
                 self.options,
-                submitter=self.submitter,
                 path=disp_path,
                 key=disp)
             self.singlepoints.append(disp_singlepoint)
@@ -81,7 +78,7 @@ class Hessian(object):
             self.options.job_array_range = (1, self.ndisps)
             working_directory = os.getcwd()
             os.chdir(self.path)
-            self.submitter(self.options)
+            self.options.submitter(self.options)
             os.chdir(working_directory)
 
     def compute_hessian(self, sow=True):
