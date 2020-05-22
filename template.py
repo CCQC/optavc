@@ -27,25 +27,25 @@ class InputFile(object):
 
 class TemplateFileProcessor(object):
     """
-  Takes a template file and an options object for its contructor and creates
-  the corresponding InputFile and Molecule objects, which are saved as class
-  attributes.
-  """
+    Takes a template file and an options object for its contructor and creates
+    the corresponding InputFile and Molecule objects, which are saved as class
+    attributes.
+    """
 
     def __init__(self, file_string, options):
         """
-    :param file_string: a string of the template file
-    :param options: an optavc options dictionary
+        :param file_string: a string of the template file
+        :param options: an optavc options dictionary
 
-    Generate an InputFile and Molecule
-    """
+        Generate an InputFile and Molecule
+        """
         # Bagel does things diffrerently
         if 'bagel' in file_string[:100]:
             """
-      Sample bagel geometry line
-      {"atom" : "Li",  "xyz" : [ 0.0, 0.0,  1.0]},
-      {"atom" : "F",   "xyz" : [ 0.0, 0.0, -1.0]}
-      """
+            Sample bagel geometry line
+            {"atom" : "Li",  "xyz" : [ 0.0, 0.0,  1.0]},
+            {"atom" : "F",   "xyz" : [ 0.0, 0.0, -1.0]}
+            """
             import json
             jinp = json.loads(file_string)
             geom = ''
@@ -72,10 +72,10 @@ class TemplateFileProcessor(object):
 
         else:
             """
-      Sample geometry line
-      H     0.0 0.0 0.0
-      O     0.0 0.0 1.0
-      """
+            Sample geometry line
+            H     0.0 0.0 0.0
+            O     0.0 0.0 1.0
+            """
             geom_line_regex = regex.lsp_atomic_symbol + 3 * regex.lsp_signed_double + regex.lsp_endline
             geom_block_regex = regex.two_or_more(geom_line_regex)
 
@@ -89,10 +89,10 @@ class TemplateFileProcessor(object):
             start, end = match.start(), match.end()
             coord_str = file_string[start:end]
             """
-      Extract the contents of the current geometry block and use it to build a
-      molecule -- the units of the geometry contained in the template file must
-      be specified in options.input_units (default: "angstrom")
-      """
+            Extract the contents of the current geometry block and use it to build a
+            molecule -- the units of the geometry contained in the template file must
+            be specified in options.input_units (default: "angstrom")
+            """
             xyzstring = "units {:s}\n{:s}".format(options.input_units,
                                                   coord_str)
 
