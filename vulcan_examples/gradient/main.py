@@ -1,9 +1,5 @@
-# 1. build a submit function
-import vulcan.queue as vq
-def submit(optns):
-  vq.submit(optns.queue, optns.program, input=optns.input_name, output=optns.output_name, sync=True, job_array=optns.job_array_range)
+# Not tested with current optavc
 
-# 2. build an options object
 from optavc.options import Options
 options_kwargs = {
   'template_file_path': "template.dat",

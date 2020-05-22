@@ -1,17 +1,16 @@
 import os
 import re
 import shutil
+from . import submitter
 
 
 class SinglePoint(object):
-    def __init__(self, molecule, inp_file_obj, options, submitter, path=".", key=None):
+    def __init__(self, molecule, inp_file_obj, options, path=".", key=None):
         self.molecule = molecule
         self.inp_file_obj = inp_file_obj
         self.options = options
-        self.submitter = submitter
         self.path = os.path.abspath(path)
         self.key = key
-        self.submitter=submitter
         self.dict = {}
 
     def to_dict(self):
@@ -43,7 +42,7 @@ class SinglePoint(object):
     def run(self):
         working_directory = os.getcwd()
         os.chdir(self.path)
-        self.submitter(self.options)
+        submitter.submit(self.options)
         os.chdir(working_directory)
 
     def get_energy_from_output(self) -> list:
@@ -52,16 +51,18 @@ class SinglePoint(object):
 
         energy = []
         if re.search(self.options.success_regex, output_text):
+            if not isinstance(self.options.energy_regex, list):
+                self.options.energy_regex = [self.options.energy_regex]
+
             for energy_str in self.options.energy_regex:
                 energy.append(get_last_energy(energy_str, output_path, output_text))
-
+            
             correction = sum(get_last_energy(correction_regex, output_path, output_text)
                              for correction_regex in self.options.correction_regexes)
-
-            if correction != 0 and len(energy) > 1:
-                raise ValueError("Cannot currently use extrapolation and correction features simultaneously")
-            else:
-                return [correction + e for e in energy]  # correction is zero can safely add
+            
+            energy[0] += correction # If no correction, adding zero. Add to correlation energy if 2 energies 
+            
+            return energy
         else:
             raise RuntimeError("SinglePoint job at {:s} failed.".format(output_path))
 
@@ -70,5 +71,7 @@ def get_last_energy(regex_str, output_path, output_text):
     try:
         return float(re.findall(regex_str, output_text)[-1])
     except ValueError:
-        raise ValueError(
-            "Could not find energy in {:s}.".format(output_path))
+        if regex_str == '':
+            return 0.0   # Yes, yes, I'm silencing an exception no one cares
+        else:
+            raise ValueError(f"Could not find energy in {output_path} using {regex_str}")

@@ -1,39 +1,25 @@
 import psi4
 import numpy as np
-import copy
-from .template import TemplateFileProcessor
 from .molecule import Molecule
 from .gradient import Gradient
+from .xtpl import xtpl_wrapper
 
 class Optimization(object):
-    def __init__(self, options, submitters):
+    def __init__(self, options, input_obj, molecule, xtpl_inputs=None):
        
-        # Initialization of molecule is based on the first template provided
-
-        if options.xtpl:
-            tfps = [TemplateFileProcessor(open(i).read(), options) for i in options.xtpl_templates]
-            tfp = tfps[0]
-            self.xtpl_templates = [i.input_file_object for i in tfps]
-        else:
-            template_file_string = open(options.template_file_path).read()
-            tfp = TemplateFileProcessor(template_file_string, options)
-
-        # parses a single-point energy input into a molecule object and an input file template
-        # the units of the molecular geometry contained in the template must be specified by
-        # options.input_units
-        self.reference_molecule = tfp.molecule
-        self.inp_file_obj = tfp.input_file_object  
+        self.reference_molecule = molecule
+        self.inp_file_obj = input_obj
         self.options = options
         self.step_molecules = []
-        self.submitter = submitters
+        self.xtpl_inputs = xtpl_inputs
 
-    def run(self, restart_iteration=0):
+    def run(self, restart_iteration=0, xtpl_restart=None):
         for iteration in range(self.options.maxiter):    
             self.step_molecules.append(self.reference_molecule)
             # compute the gradient for the current molecule -- the path for gradient computation is set to "STEP0x"
             
             if self.options.xtpl:
-                ref_energy, grad = self.xtpl_grad(iteration, restart_iteration)  # Call single_grad repeatedly
+                ref_energy, grad = self.xtpl_grad(iteration, restart_iteration, xtpl_restart)  # Call single_grad repeatedly
             else:
                 grad, grad_obj = self.single_grad(iteration, restart_iteration)
                 ref_energy = grad_obj.get_reference_energy()
@@ -61,104 +47,94 @@ class Optimization(object):
             from .mpi4py_iface import slay
             slay()  # kill all workers before exiting
 
-    def single_grad(self, iteration, restart_iteration, inp_file_obj=None, xtpl_options=None, submitter=None,
-                    split_scf_corl=False):
-        """ Standard optimization procedure. Calculate a single gradient
-
+    def single_grad(self, iteration, restart_iteration, inp_file_obj=None, options=None,
+                    step_path=None, split_scf_corl=False, xtpl_restart=None, grad_obj=None):
+        """ A standard, single gradient for an optimization.
         Parameters
         ----------
         iteration: int
         restart_iteration: int
+            indicates (with iteration) whether to sow/run or just reap previous energies
         inp_file_obj: template.InputFile, optional
-        xtpl_options: dict, optional
-        submitter: function, optional
-        split_scf_corl : bool
+            input file for each needed singlepoint
+        options: options.Options, optional
+        step_path: str, optional
+        split_scf_corl: bool, optional
+            if true two gradients are returned from reap in order (correlation gradient, scf gradient)
+        grad_obj: Object, optional
+            if provided overrides everything. Use gradient object for calculation
 
-        Notes
-        -----
-        Set standard options using xtpl_programs and give gradient fresh copy of options
-        otherwise assign self.options to new name and pass to Gradient"""
+        Returns
+        -------
+        tuple
+            1 or 2 gradients: psi4.core.Matrix 
+            grad_obj: gradient.Gradient
+        """
 
-        if not inp_file_obj:
-            inp_file_obj = self.inp_file_obj
-        if not submitter:
-            submitter = self.submitter
+        # Fill in options parameters with class attributes if not provided
+        if grad_obj is None:
+            if inp_file_obj is None:
+                inp_file_obj = self.inp_file_obj
+            if options is None:
+                options = self.options
+            if step_path is None:
+                step_path = f"STEP{iteration:>02d}"
+             
+            grad_obj = Gradient(self.reference_molecule, inp_file_obj, options, step_path, split_scf_corl)
 
-        if xtpl_options:
-            options = copy.deepcopy(self.options)
-            options.program = xtpl_options.get("program")
-            options.energy_regex = xtpl_options.get("energy") 
-            options.success_regex = xtpl_options.get("success")
-            step_path = f"STEP{iteration:>02d}/{xtpl_options.get('path_add')}"
-
-            print(f"Using {options.program}")
-            print(f"Using {options.energy_regex}")
-            print(f"Using {options.success_regex}")
-        
-        else:
-            options = self.options
-            step_path = f"STEP{iteration:>02d}"
-        
-        grad_obj = Gradient(self.reference_molecule, inp_file_obj, options, submitter, step_path, split_scf_corl)
-        if iteration >= restart_iteration:
-            grad_obj.sow()
-            grad_obj.run()
+        # reassemble gradients as possible
+        # If restart iteration is 5. STEP00 -> O4 should be complete.
+        # If restart iteration is  and xtpl_restrt is large_basis. Everything up through STEP05 
+        # high_corr should be complete
         try:
-            grad = grad_obj.reap()
-        except:
-            raise Exception(
-                "Could not reap gradient at step {:d}".format(iteration))
+            if iteration < restart_iteration or xtpl_restart:
+               grad = grad_obj.reap() #could be 1 or more  gradients
+            else:    
+               grad = grad_obj.compute_gradient()
+        except RuntimeError as e:
+             if xtpl_restart:
+                print(f"[CRITICAL] - could not compute gradient at step {iteration} substep {restart}")
+             else:
+                print(f"[CRITICAL] - could not compute gradient at step {iteration}")
+             raise
+        except FileNotFoundError as e:
+             print(f"Missing {self.options.output_name}")
+             raise
+
         return grad, grad_obj
 
-    def xtpl_grad(self, iteration, restart_iteration):
-        """ Call single_grad for each gradient needed. Subdirectories will be created within STEPXX
-        Perform gradient extrapolation
-        
-        Parameters
-        ----------
-        iteration: int
-        restart_iteration: int
-
-        Notes
-        -----
-        For each theory level and basis set need a gradient of correlation energies
-        For large_basis we need to also get the SCF gradient
+    def xtpl_grad(self, iteration, restart_iteration, xtpl_restart=None):
+        """ Call single_grad repeatedly using gradient objects from xtpl.xtpl_wrapper
+            perform a basis set extrapolation and correlation correction 
+       
+            Gradients come back in order: ["high_corr", "large_basis", "med_basis", "small_basis"]
+            The second gradient "large_basis" comes back as a tuple of the correlation gradient and the scf gradient
+            
         """
-        from psi4.driver.cbs_wraper import corl_xtpl_helgaker_2
-
-        path_additions = ["high_corr", "large_basis", "med_basis", "small_basis"]
-        ref_energies = [] 
+        from psi4.driver.driver_cbs import corl_xtpl_helgaker_2
+        
         gradients = []
+        ref_energies = []
         scf_grad, scf_energy = 0, 0
 
-        for index, inp_file_obj in enumerate(self.xtpl_templates):
+        if xtpl_restart is not None:
+            if xtpl_restart not in path_additions:
+                raise ValueError(f"""Cannot understand xtpl_restart: {xtpl_restart}.
+                                 xtpl_restart must match: {path_additions}""")
 
-            # Only two possible programs/success strings
-            if index > 0:
-                opt_index = -1
+        for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.reference_molecule, self.xtpl_inputs, self.options, iteration)):
+
+            # Restart an xtpl_job. If you're trying to go back a few steps
+            # just use restart_iteration
+            if xtpl_restart is not None:
+                if index < path_additions.index(xtpl_restart) and iteration == restart_iteration:
+                    restart = path_additions[index]
+                else:
+                    restart = None
             else:
-                opt_index = 0
+                restart = None
 
-            # Three possible energy strings. 1 needs both scf and low correlation energy
-            if index == 1:
-                energy_regex = self.options.xtpl_energy[1:3]
-                split_scf_corl = True
-            elif index == 0:
-                energy_regex = self.options.xtpl_energy[0]
-                split_scf_corl = False
-            else:
-                energy_regex = self.options.xtpl_energy[1]
-                split_scf_corl = False
-
-            # Set specific program and regex strings for specific gradient needed
-            # Will be used to create gradient object
-            xtpl_options = {"program": self.options.xtpl_programs[opt_index], 
-                            "success": self.options.xtpl_success[opt_index],
-                            "energy": energy_regex,
-                            "path_add": path_additions[index]}
-
-            grad, grad_obj = self.single_grad(iteration, restart_iteration, inp_file_obj, xtpl_options, 
-                                              self.submitter[opt_index], split_scf_corl=split_scf_corl)
+            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_restart=restart, grad_obj=grad_obj)
 
             # Save scf gradient and energy till end
             if index == 1:
@@ -175,26 +151,22 @@ class Optimization(object):
         basis_sets = self.options.xtpl_basis_sets
         # These are "correlation gradients" i.e. energy_regex should correspond only to correlation energy
         # using order of path additions above ["high_corr", "large_basis", "med_basis", "small_basis", "scf"]
-        low_CBS_g = corl_xtpl_helgaker_2("basis set xtpl G", basis_sets[1], gradients[2], basis_sets[2],
-                                         gradients[3]).np
-        low_CBS_e = corl_xtpl_helgaker_2("basis set xtpl E", basis_sets[1], ref_energies[2], basis_sets[2],
-                                         ref_energies[3])
+        low_CBS_g = corl_xtpl_helgaker_2("basis set xtpl G", basis_sets[1], gradients[2], basis_sets[0],
+                                         gradients[1])
+        low_CBS_e = corl_xtpl_helgaker_2("basis set xtpl E", basis_sets[1], ref_energies[2], basis_sets[0],
+                                         ref_energies[1])
         # This is, for instance, mp2/[T,Q]Z + CCSD(T)/DZ - mp2/DZ + SCF/QZ
         final_grad = psi4.core.Matrix.from_array(low_CBS_g.np + gradients[0].np - gradients[3].np + gradients[4].np)
         final_en = low_CBS_e + ref_energies[0] - ref_energies[3] + ref_energies[4]
-        print(f"Energies: {ref_energies}")
-        print(f"Gradients: {gradients}")
+        
+        print(f"\n\n=====================================xtpl=====================================\n")
+        print(f"xtpl gradient:\n {str(final_grad.np)}")
+        print(f"mp2/tqz{low_CBS_e}\t\t\t using helgaker 2 pt xtpl\n\n")
+        print(f"CCSD - mp2 {ref_energies[0] - ref_energies[3]}")
+        print(f"xtpl energy: {final_en}")
+        print(f"energies {ref_energies}")
+        print(f"gradients {[i.np for i in gradients]}")
+        print(f"\n=====================================xtpl=====================================\n\n")
+        
         return final_en, final_grad
-
-    @property
-    def submitter(self):
-        return self._submitter
-
-    @submitter.setter
-    def submitter(self, submitter_objs):
-        if callable(submitter_objs):    
-            submitter_objs = [submitter_objs] # only one submitter and its a function as expected
-        elif len(submitter_objs) == 2 and self.options.xtpl is False:
-            raise ValueError("""Too many submitters for a standard optimization.""")
-        self._submitter = submitter_objs
 

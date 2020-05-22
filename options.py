@@ -7,7 +7,7 @@ from typing import Union
 class Options(object):
     def __init__(self, **kwargs):
 
-        self.template_file_path = kwargs.pop("template_file_path", default="template.dat")
+        self.template_file_path = kwargs.pop("template_file_path", "template.dat")
         self.energy_regex = kwargs.pop("energy_regex", "")
         self.success_regex = kwargs.pop("success_regex", "")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
@@ -19,7 +19,6 @@ class Options(object):
         self.output_name = kwargs.pop("output_name", "output.dat")
         self.input_units = kwargs.pop("input_units", "angstrom")
         self.point_group = kwargs.pop("point_group", None)
-        self.submitter = kwargs.pop("submitter", lambda submit: None)
         self.maxiter = kwargs.pop("maxiter", 20)
         self.mpi = kwargs.pop("mpi", None)
         self.job_array = kwargs.pop("job_array", False)
@@ -37,6 +36,7 @@ class Options(object):
         self.xtpl_basis_sets = kwargs.pop("xtpl_basis_sets", None)
         self.xtpl_success = kwargs.pop("xtpl_success", None)
         self.xtpl_energy = kwargs.pop("xtpl_energy", None)
+        self.xtpl_corrections = kwargs.pop("xtpl_corrections", None)
 
         if self.mpi is not None:
             # from .mpi4py import compute
@@ -44,6 +44,20 @@ class Options(object):
             self.command = kwargs.pop("command")
             # self.submitter = compute
         initialize_psi_options(kwargs)
+
+    @property
+    def xtpl_corrections(self) -> Union[tuple, list]:
+        return self._xtpl_corrections
+
+    @xtpl_corrections.setter
+    def xtpl_corrections(self, vals):
+        if vals is None:
+            pass
+        elif not isinstance(vals, dict) or len(vals) > 2:
+            raise ValueError("""Can have at most two corrections for extrapolating gradients of the form
+                             {0: "string0"} or {0: r"string0", 1: r"string1"}""")
+        self._xtpl_corrections = vals
+        
 
     @property
     def xtpl_success(self):
@@ -95,10 +109,11 @@ class Options(object):
             self._xtpl = False    
         elif len(templates) != 4:
             raise ValueError("Must provide 4 templates files to use basis set extrapolation.")
-        for item in templates:
-            if templates.count(item) != 1:
-                raise ValueError("Template files provided are not unique.")
         else:
+            for item in templates:
+                if templates.count(item) != 1:
+                    raise ValueError("Template files provided are not unique.")
+        
             self._xtpl_templates = templates
             self.xtpl = True
     
