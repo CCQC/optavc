@@ -50,8 +50,8 @@ class SinglePoint(object):
         try:
             output_path = os.path.join(self.path, self.options.output_name)
             output_text = open(output_path).read()
-        except FileNotFoundError:
-            print(e)
+        except FileNotFoundError as e:
+            print(str(e))
             print("Could not open output file")
             raise
             

@@ -49,7 +49,8 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
         options.success_regex = xtpl_options.xtpl_success[corl_index]
         options.correction_regexes = [xtpl_options.xtpl_corrections.get(f"{abs(corl_index)}", "")]
         options.energy_regex = energy_regex
-        
+        options.wait_time = xtpl_options.xtpl_wait_times[index]
+ 
         if job_type.upper() == 'GRADIENT':
             step_path = f"STEP{iteration:>02d}/{path_additions[index]}"
             grad_obj = Gradient(molecule, inp_file_obj, options, step_path, split_scf_corl)
