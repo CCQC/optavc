@@ -73,7 +73,7 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
 
     if jobtype.upper() in ['OPT', "OPTIMIZATION"]:
         opt_obj = optimize.Optimization(options_obj, input_obj, molecule, xtpl_inputs)
-        opt_obj.run()
+        opt_obj.run(restart_iteration, xtpl_restart)
     elif jobtype.upper() in ["HESS", "FREQUENCY", "HESSIAN"]:
         if options_obj.xtpl:
             hessian.xtpl_hessian(options_obj, molecule, xtpl_inputs, path, sow)

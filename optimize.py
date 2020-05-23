@@ -87,18 +87,25 @@ class Optimization(object):
         # If restart iteration is  and xtpl_restrt is large_basis. Everything up through STEP05 
         # high_corr should be complete
         try:
+            print(iteration)
+            print(restart_iteration)
             if iteration < restart_iteration or xtpl_restart:
                grad = grad_obj.reap() #could be 1 or more  gradients
             else:    
                grad = grad_obj.compute_gradient()
         except RuntimeError as e:
              if xtpl_restart:
+                print(str(e))
                 print(f"[CRITICAL] - could not compute gradient at step {iteration} substep {restart}")
              else:
+                print(str(e))
                 print(f"[CRITICAL] - could not compute gradient at step {iteration}")
              raise
         except FileNotFoundError as e:
              print(f"Missing {self.options.output_name}")
+             raise
+        except ValueError as e:
+             print(e)
              raise
 
         return grad, grad_obj
@@ -116,25 +123,28 @@ class Optimization(object):
         gradients = []
         ref_energies = []
         scf_grad, scf_energy = 0, 0
+        paths = ["high_corr", "large_basis", "med_basis", "small_basis"]
 
         if xtpl_restart is not None:
-            if xtpl_restart not in path_additions:
+            if xtpl_restart not in paths:
                 raise ValueError(f"""Cannot understand xtpl_restart: {xtpl_restart}.
-                                 xtpl_restart must match: {path_additions}""")
+                                 xtpl_restart must match: {paths}""")
 
-        for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.reference_molecule, self.xtpl_inputs, self.options, iteration)):
+        for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.reference_molecule, 
+                                                      self.xtpl_inputs, self.options, iteration)):
 
             # Restart an xtpl_job. If you're trying to go back a few steps
             # just use restart_iteration
             if xtpl_restart is not None:
-                if index < path_additions.index(xtpl_restart) and iteration == restart_iteration:
-                    restart = path_additions[index]
+                if index < paths.index(xtpl_restart) and iteration == restart_iteration:
+                    restart = paths[index]
                 else:
                     restart = None
             else:
                 restart = None
 
-            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_restart=restart, grad_obj=grad_obj)
+            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_restart=restart, 
+                                              grad_obj=grad_obj)
 
             # Save scf gradient and energy till end
             if index == 1:

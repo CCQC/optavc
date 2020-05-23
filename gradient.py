@@ -142,4 +142,24 @@ class Gradient(object):
     def compute_gradient(self):
         self.sow()
         self.run()
-        return self.reap()
+
+        if self.options.cluster.upper() == 'SAPELO':
+            return self.sapelo_gradient_wait()
+        else: 
+            return self.reap()
+
+    def sapelo_gradient_wait():
+        """ Sapelo will wait for a maximum of 12 hours for a gradient before qutting """
+        wait = True    
+        for i in range(12):
+            while wait == True:
+                try:
+                    gradient = self.reap()
+                    return gradient
+                except RuntimeError as e:
+                    # Go back to sleep for an hour we'll try again later.
+                    os.sleep(360)
+                    pass
+        else:
+            # else is attached to for loop if we exceed need to throw an error
+            raise RuntimeError("Wait time exceeded. Time to quit")

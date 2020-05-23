@@ -46,9 +46,15 @@ class SinglePoint(object):
         os.chdir(working_directory)
 
     def get_energy_from_output(self) -> list:
-        output_path = os.path.join(self.path, self.options.output_name)
-        output_text = open(output_path).read()
 
+        try:
+            output_path = os.path.join(self.path, self.options.output_name)
+            output_text = open(output_path).read()
+        except FileNotFoundError:
+            print(e)
+            print("Could not open output file")
+            raise
+            
         energy = []
         if re.search(self.options.success_regex, output_text):
             if not isinstance(self.options.energy_regex, list):
@@ -64,6 +70,7 @@ class SinglePoint(object):
             
             return energy
         else:
+            print("Could not find success string in output.dat")
             raise RuntimeError("SinglePoint job at {:s} failed.".format(output_path))
 
 
