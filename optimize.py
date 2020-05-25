@@ -128,10 +128,17 @@ class Optimization(object):
         for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.reference_molecule,
                                                       self.xtpl_inputs, self.options, iteration)):
 
+            # [2, 2] -> grab the low correlation, small basis calculations in single input file
+            # [1, 3] -> do all low correlation calculations in single output file
+            if self.options.xtpl_input_style == [2, 2]:
+                separate_mp2 = 2
+            else:
+                separate_mp2 = 1
+
             # want to set sow = False if iteration < restart_iteration
             # if index not in [0, 2]
             # if xtpl_restart and index == 0
-            if index not in [0, 2] or (xtpl_restart and index == 0):
+            if index not in [0, separate_mp2] or (xtpl_restart and index == 0):
                 xtpl_restart = False
             else:
                 xtpl_restart = True

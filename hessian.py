@@ -143,7 +143,12 @@ def xtpl_hessian(options, molecule, xtpl_inputs, path=".", sow=True):
 
     for index, hess_obj in enumerate(xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options)):
 
-        if index not in [0, 2]:
+        if hess_obj.options.xtpl_input_style == [2, 2]:
+            separate_mp2 = 2
+        else:
+            separate_mp2 = 1
+
+        if index not in [0, separate_mp2]:
             sow = False
 
         hessian = hess_obj.compute_hessian(sow)

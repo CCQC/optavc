@@ -25,13 +25,21 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
     # Need to do: (CCSD, (T) correction), MP2
     #             MP2/QZ, SCF/QZ and MP2/TZ
     # reorder energy regex to match internal order above
+
     ordered_E_regexes = [xtpl_options[0], xtpl_options[4], xtpl_options[1], xtpl_options[2],
                          xtpl_options[5]]
+
     for index, energy_regex in enumerate(ordered_E_regexes):
 
         # index can be only 0 or 1 here
         # Only two possible programs/success strings/input files
-        if index >= 2:
+
+        if xtpl_options.xtpl_input_style == [2, 2]:
+            separate_mp2 = 2
+        else:
+            separate_mp2 = 1
+
+        if index >= separate_mp2:
             corl_index = -1
         else:
             corl_index = 0

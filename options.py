@@ -41,6 +41,7 @@ class Options(object):
         self.xtpl_energy = kwargs.pop("xtpl_energy", None)
         self.xtpl_corrections = kwargs.pop("xtpl_corrections", None)
         self.xtpl_wait_times = kwargs.pop("xtpl_wait_times", None)
+        self.xtpl_input_style = kwargs.pop("xtpl_input_style", None)
 
         if self.mpi is not None:
             # from .mpi4py import compute
@@ -164,6 +165,17 @@ class Options(object):
             if self.cluster != "SAPELO" or self.xtpl is False:
                 raise ValueError(f"Cannot use xtpl_wait_times with current cluster {self.cluster}")
         self._xtpl_wait_times = vals
+
+    @property
+    def xtpl_input_style(self):
+        return self._xtpl_input_style
+
+    @xtpl_input_style.setter
+    def xtpl_input_style(self, vals):
+        if vals not in [[2, 2], [1, 3]]:
+            raise ValueError("""Value error cannot understand xtpl_input_style: {vals}
+                             xtpl_input_style should be [2, 2] or [1, 3]""")
+        self._xtpl_input_style = vals
 
 
 def initialize_psi_options(kwargs):
