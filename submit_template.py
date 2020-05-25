@@ -59,6 +59,6 @@ progdict = {
 
 sapelo_mod_load = {
 	"molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin/",
-	"psi4": "module load psi4/1.3.2_conda"
+	"psi4": "module load PSI4/1.3.2_conda"
 }
 

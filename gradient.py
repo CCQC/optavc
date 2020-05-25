@@ -1,7 +1,10 @@
 import os
-import psi4
+import time
 import numpy as np
+
+import psi4
 #from .dask_iface import run_parallel as rp
+
 from .singlepoint import SinglePoint
 from .submitter import submit
 
@@ -142,4 +145,24 @@ class Gradient(object):
     def compute_gradient(self):
         self.sow()
         self.run()
-        return self.reap()
+
+        if self.options.cluster == 'SAPELO':
+            return self.sapelo_gradient_wait()
+        else: 
+            return self.reap()
+
+    def sapelo_gradient_wait(self):
+        """ Sapelo will wait for a maximum of 12 hours for a gradient before qutting """
+        wait = True 
+        for i in range(20):
+            while wait == True:
+                try:
+                    time.sleep(self.options.wait_time)
+                    gradient = self.reap()
+                    return gradient
+                except (RuntimeError, FileNotFoundError) as e:
+                    print(str(e))
+                    pass
+        else:
+            # else is attached to for loop if we exceed 20 sleeps its time to stop trying
+            raise RuntimeError("Wait time exceeded. Time to quit")

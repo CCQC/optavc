@@ -28,8 +28,9 @@ class Options(object):
         self.email = kwargs.pop("email", None)
         self.email_opts = kwargs.pop("email_opts", 'ae')
         self.memory = kwargs.pop("memory", "")
-        self.cluster = kwargs.pop("cluster", "")
+        self.cluster = kwargs.pop("cluster", "").upper()
         self.name = kwargs.pop("name", "")
+        self.wait_time = kwargs.pop("wait_time", None)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
         self.xtpl_programs = kwargs.pop("xtpl_programs", None)
@@ -37,6 +38,7 @@ class Options(object):
         self.xtpl_success = kwargs.pop("xtpl_success", None)
         self.xtpl_energy = kwargs.pop("xtpl_energy", None)
         self.xtpl_corrections = kwargs.pop("xtpl_corrections", None)
+        self.xtpl_wait_times = kwargs.pop("xtpl_wait_times", None)
 
         if self.mpi is not None:
             # from .mpi4py import compute
@@ -44,6 +46,17 @@ class Options(object):
             self.command = kwargs.pop("command")
             # self.submitter = compute
         initialize_psi_options(kwargs)
+
+    @property
+    def wait_time(self):
+        return self._wait_time
+
+    @wait_time.setter
+    def wait_time(self, val):
+        if val:
+            if self.cluster != 'SAPELO':
+                raise ValueError(f"Cannot use 'wait_time' with current cluster {self.cluster}")
+        self._wait_time = val
 
     @property
     def xtpl_corrections(self) -> Union[tuple, list]:
@@ -133,6 +146,16 @@ class Options(object):
                              [T,Q]Z gradient from a DZ gradient""")
         self._xtpl_basis_sets = basis_sets
 
+    @property
+    def xtpl_wait_times(self):
+        return self._xtpl_wait_times
+
+    @xtpl_wait_times.setter
+    def xtpl_wait_times(self, vals: Union[None, list]):
+        if vals:
+            if self.cluster != "SAPELO" or self.xtpl is False:
+                raise ValueError(f"Cannot use xtpl_wait_times with current cluster {self.cluster}")
+        self._xtpl_wait_times = vals        
 
 def initialize_psi_options(kwargs):
     for key, value in kwargs.items():
