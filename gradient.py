@@ -157,12 +157,11 @@ class Gradient(object):
         for i in range(20):
             while wait == True:
                 try:
+                    time.sleep(self.options.wait_time)
                     gradient = self.reap()
                     return gradient
-                except RuntimeError as e:
+                except (RuntimeError, FileNotFoundError) as e:
                     print(str(e))
-                    # Go back to sleep
-                    time.sleep(self.options.wait_time)
                     pass
         else:
             # else is attached to for loop if we exceed 20 sleeps its time to stop trying

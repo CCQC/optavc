@@ -1,4 +1,5 @@
 import os
+import time
 import psi4
 import numpy as np
 from . import submitter
@@ -90,6 +91,13 @@ class Hessian(object):
         if sow:
             self.sow()
             self.run()
+        if self.options.cluster == "SAPELO" and self.options.wait_time > 0:
+            return self.sapelo_hessian_wait()
+        else:
+            return self.reap2()
+
+    def reap2(self):
+        """ Unsure if reap() is used by anyone / anything """
         psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         if not self.options.mpi:
             for e in self.singlepoints:
@@ -123,7 +131,22 @@ class Hessian(object):
             return self.hessian, self.scf_hessian
 
         return self.hessian
-  
+
+    def sapelo_hessian_wait(self):
+        wait = True
+        for i in range(20):
+            while wait == True:
+                try:
+                    time.sleep(self.options.wait_time)
+                    hessian = self.reap2()
+                    return hessian
+                except (RuntimeError, FileNotFoundError) as e:
+                    print(str(e))
+                    print("Entering anither wait period")
+        else:
+            raise RuntimeError("Too many waiting periods have passed. Time to quit")
+                        
+
 def xtpl_hessian(options, molecule, xtpl_inputs, path=".", sow=True):
     """ Call compute_hessian repeatedly
     """
