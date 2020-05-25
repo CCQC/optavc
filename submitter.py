@@ -9,9 +9,9 @@ def submit(options):
     This only works on SGE and PBS clusters. Clusters are identified by name 
     and not by submission type 
     """
-    
+
     out = make_sub_script(options)
-        
+
     with open('optstep.sh', 'w') as f:
         f.write(out)
     subprocess.call('qsub optstep.sh', shell=True)
@@ -19,7 +19,7 @@ def submit(options):
 
 def make_sub_script(options):
     """ Add necessary options to the submission script """
-    
+
     q = options.queue
     prog = options.program
     progname = prog.split("@")[0]
@@ -28,10 +28,10 @@ def make_sub_script(options):
 
     odict = {
         'q': options.queue,
-        'nslots':options.nslots,
+        'nslots': options.nslots,
         'jarray': '1-{}'.format(job_num),
         'progname': progname,
-        'prog':prog,
+        'prog': prog,
         'cline': submit_template.progdict[progname]
     }
 
@@ -42,13 +42,13 @@ def make_sub_script(options):
                       'memory': options.memory,
                       'time': options.time_limit,
                       'name': options.name
-                     })    
-        out = submit_template.sapelo_template.format(**odict) 
+                      })
+        out = submit_template.sapelo_template.format(**odict)
         return out
     elif options.cluster.upper() != 'VULCAN':
         print("No cluster provided or cluster not yet supported.")
         print("Trying to continue by defaulting to Vulcan")
-   
+
     odict.update({'tc': str(job_num)})
     out = submit_template.vulcan_template.format(**odict)
     return out

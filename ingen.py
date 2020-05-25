@@ -1,4 +1,4 @@
-#Script to generate SLURM inputs for optmpi
+# Script to generate SLURM inputs for optmpi
 import os
 from subprocess import call
 import sys
@@ -45,11 +45,11 @@ if summ > 0:
         if settings[i] is None:
             print(i)
     settings["hold"] = True
-    #exit()
-#if (summ <= 2) and (summ > 0):
+    # exit()
+# if (summ <= 2) and (summ > 0):
 #  return
 
-#print(summ)
+# print(summ)
 template = """#!/bin/bash
 #SBATCH --constraint=haswell
 #SBATCH -N {nnode}
