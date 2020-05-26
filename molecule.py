@@ -39,8 +39,7 @@ class Molecule(object):
             assert self.units in ("angstrom", "bohr")
         except:
             raise Exception(
-                "Invalid argument \n{:s}\n passed to Molecule constructor.".
-                format(xyzstring))
+                "Invalid argument \n{:s}\n passed to Molecule constructor.".format(molecule_string))
 
     def set_units(self, units):
         if units == "angstrom" and self.units == "bohr":
@@ -72,13 +71,13 @@ class Molecule(object):
         return Molecule(str(self))
 
     def set_geometry(self, geom, geom_units=None):
-        #print(geom)
+        # print(geom)
         if geom_units is None: geom_units = self.units
         self.units = geom_units
         self.geom = geom
 
     def cast_to_psi4_molecule_object(self):
-        #psi4.efp_init() # JPM - Maybe the original use case needed this library?
+        # psi4.efp_init() # JPM - Maybe the original use case needed this library?
         mol = psi4.core.Molecule.from_string(str(self))
         mol.update_geometry()
         return mol

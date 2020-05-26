@@ -1,3 +1,5 @@
+# No longer works. options does not take a submitter function
+
 # 1. build a submit function
 import subprocess as sp
 def submit(optns):

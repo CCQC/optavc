@@ -1,3 +1,5 @@
+# now longer works. Add a new submitter.py to make a new submitter
+
 # 1. build a submit function
 import subprocess as sp
 def submit(optns):

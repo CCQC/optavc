@@ -1,30 +1,29 @@
 import os
 import time
-import psi4
 import numpy as np
+
+import psi4
+
 from . import submitter
 from .singlepoint import SinglePoint
 
+
 class Hessian(object):
-    def __init__(self, options, input_obj, molecule, path=".", split_scf_corl=False):
+    def __init__(self, options, input_obj, molecule, path="."):
         self.molecule = molecule
         self.inp_file_obj = input_obj
         self.options = options
         self.path = os.path.abspath(path)
         self.singlepoints = []
-        self.ndisps = None # will be set later
+        self.ndisps = None  # will be set later
         self.findifrec = None
-        self.split_scf_corl = split_scf_corl
-        self.scf_hessian = None
+        self.hessian = None
         self.make_singlepoints()
 
     def make_singlepoints(self):
         """ Use psi4's finite diff machinery to create dispalcements and singlepoints """
         psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         self.findifrec = psi4.driver_findif.hessian_from_energy_geometries(psi4_mol_obj, -1)
-        if self.split_scf_corl: 
-            # create an addition finite difference object for the reference component
-            self.scf_findifrec = psi4.driver_findif.hessian_from_energy_geometries(psi4_mol_obj, -1)
 
         ref_molecule = self.molecule.copy()
         ref_path = os.path.join(self.path, "{:d}".format(1))
@@ -37,7 +36,7 @@ class Hessian(object):
             disp_molecule.set_geometry(np.array(self.findifrec['displacements'][disp]['geometry']),
                                        geom_units="bohr")
             disp_path = os.path.join(self.path, "{:d}".format(disp_num + 2))
-            disp_singlepoint = SinglePoint(disp_molecule, self.inp_file_obj, self.options, 
+            disp_singlepoint = SinglePoint(disp_molecule, self.inp_file_obj, self.options,
                                            path=disp_path, key=disp)
             self.singlepoints.append(disp_singlepoint)
         self.ndisps = len(self.singlepoints)
@@ -45,7 +44,7 @@ class Hessian(object):
     def get_hessian(self):
         try:
             return self.hessian
-        except:
+        except KeyError:
             raise Exception(
                 "Hessian is not yet defined -- did you remember to run compute_hessian() first?"
             )
@@ -53,13 +52,7 @@ class Hessian(object):
     def get_reference_energy(self):
         try:
             return self.findifrec['reference']['energy']
-        except:
-            raise Exception(
-                "Energy not yet computed -- did you remember to run compute_hessian() first?")
-    def get_scf_reference_energy(self):
-        try:
-            return self.scf_findifrec['reference']['energy']
-        except:
+        except KeyError:
             raise Exception(
                 "Energy not yet computed -- did you remember to run compute_hessian() first?")
 
@@ -91,10 +84,9 @@ class Hessian(object):
         if sow:
             self.sow()
             self.run()
-        if self.options.cluster == "SAPELO" and self.options.wait_time > 0:
+        elif self.options.cluster == "SAPELO" and self.options.wait_time > 0:
             return self.sapelo_hessian_wait()
-        else:
-            return self.reap2()
+        return self.reap2()
 
     def reap2(self):
         """ Unsure if reap() is used by anyone / anything """
@@ -104,38 +96,28 @@ class Hessian(object):
                 key = e.key
                 energy = e.get_energy_from_output()
                 if key == 'reference':
-                    self.findifrec['reference']['energy'] = energy[0]
-                    if self.split_scf_corl:
-                        self.scf_findifrec['reference']['energy'] = energy[1]
+                    self.findifrec['reference']['energy'] = energy
                 else:
-                    self.findifrec['displacements'][key]['energy'] = energy[0]
-                    if self.split_scf_corl:
-                        self.scf_findifrec['displacements'][key]['energy'] = energy[1]
+                    self.findifrec['displacements'][key]['energy'] = energy
 
-        self.hessian = psi4.driver_findif.compute_hessian_from_energies(
-            self.findifrec, -1)
-        self.hessian = psi4.core.Matrix.from_array(self.hessian)
+        hess = psi4.driver_findif.compute_hessian_from_energies(self.findifrec, -1)
+        self.hessian = psi4.core.Matrix.from_array(hess)
         # Could we get the global_option basis? Yes.
         # Would we need to set it, just for this? Yes.
         # Does it mean anything. No, not with our application.
         wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
         wfn.set_hessian(self.hessian)
         wfn.set_energy(self.findifrec['reference']['energy'])
-        psi4.core.set_variable("CURRENT ENERGY",self.findifrec['reference']['energy'])
+        psi4.core.set_variable("CURRENT ENERGY", self.findifrec['reference']['energy'])
         psi4.driver.vibanal_wfn(wfn)
         psi4.driver._hessian_write(wfn)
-
-        if self.split_scf_corl:
-            scf_hessian = psi4.driver_findif.compute_hessian_from_energies(self.scf_findifrec, -1)
-            self.scf_hessian = psi4.core.Matrix.from_array(scf_hessian)
-            return self.hessian, self.scf_hessian
 
         return self.hessian
 
     def sapelo_hessian_wait(self):
         wait = True
         for i in range(20):
-            while wait == True:
+            while wait:
                 try:
                     time.sleep(self.options.wait_time)
                     hessian = self.reap2()
@@ -145,39 +127,51 @@ class Hessian(object):
                     print("Entering anither wait period")
         else:
             raise RuntimeError("Too many waiting periods have passed. Time to quit")
-                        
+
 
 def xtpl_hessian(options, molecule, xtpl_inputs, path=".", sow=True):
     """ Call compute_hessian repeatedly
+    Need to do: (CCSD, (T) correction), MP2
+                MP2/QZ, SCF/QZ and MP2/TZ
     """
-    from psi4.driver.driver_cbs import corl_xtpl_helgaker_2
-    from .xtpl import xtpl_wrapper # circular import fix
+
+    from .xtpl import xtpl_wrapper, energy_correction, order_high_low  # circular import fix
 
     hessians = []
     ref_energies = []
 
     for index, hess_obj in enumerate(xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options)):
-        hessian = hess_obj.compute_hessian(sow)
-        if index == 1:
-            scf_hess = hessian[1]
-            hessians.append(hessian[0])
-            scf_energy = hess_obj.get_scf_reference_energy()
+        if hess_obj.options.xtpl_input_style == [2, 2]:
+            separate_mp2 = 2
         else:
-            hessians.append(hessian)
+            separate_mp2 = 1
+
+        if index not in [0, separate_mp2] or sow is False:
+            xtpl_sow = False
+        else:
+            xtpl_sow = True
+
+        print(f"Trying to compute hessian. sow is {sow}")
+        hessian = hess_obj.compute_hessian(xtpl_sow)
+        hessians.append(hessian)
         ref_energies.append(hess_obj.get_reference_energy())
 
-    hessians.append(scf_hess)
-    ref_energies.append(scf_energy)
     basis_sets = options.xtpl_basis_sets
     # Same order as in xtpl_grad()
-    low_cbs_hess = corl_xtpl_helgaker_2("basis set xtpl Hess", basis_sets[1], hessians[2], basis_sets[0], hessians[1])
-    low_cbs_e = corl_xtpl_helgaker_2("basis set xtpl E", basis_sets[1], ref_energies[2], basis_sets[0],
-                                     ref_energies[1])
+    
+    #xtpl.order_high_low
+    ordered_en, ordered_hess = order_high_low(hessians, ref_energies, options.xtpl_input_style)
+    
+    final_en, final_hess, _ = energy_correction(basis_sets, ordered_hess, ordered_en)
 
-    # This is, for instance, mp2/[T,Q]Z + CCSD(T)/DZ - mp2/DZ + SCF/QZ
-    final_hess = psi4.core.Matrix.from_array(low_cbs_hess.np + hessians[0].np - hessians[3].np + hessians[4].np)
-    final_en = low_cbs_e + ref_energies[0] - ref_energies[3] + ref_energies[4]
-   
+    print("\n\n=============================XTPL-HESS=============================")
+    print(f"Energies:\n {ordered_en}")
+    print(f"final_energy: {final_en}")
+    print(f"final_hess:\n {final_hess.np}")
+    print("===================================================================\n\n")
+
+    print("Any imaginary freqeuency mode warnings from psi4 should now be heeded")
+    print("All other warnings may be safely ignored")
     psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
     wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
     wfn.set_hessian(final_hess)
@@ -186,8 +180,4 @@ def xtpl_hessian(options, molecule, xtpl_inputs, path=".", sow=True):
     psi4.driver.vibanal_wfn(wfn)
     psi4.driver._hessian_write(wfn)
 
-    print(ref_energies)
-    print(final_en)
-
     return final_hess
-

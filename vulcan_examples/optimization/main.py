@@ -1,10 +1,5 @@
-# 1. build a submit function
-import vulcan.queue as vq
-def submit(optns):
-  vq.submit(optns.queue, optns.program, input=optns.input_name, output=optns.output_name, sync=True, job_array=optns.job_array_range)
+import optavc
 
-# 2. build an options object
-from optavc.options import Options
 options_kwargs = {
   'template_file_path': "template.dat",
   'energy_regex'      : r"@DF-RHF Final Energy:\s+(-\d+\.\d+)",
@@ -19,9 +14,5 @@ options_kwargs = {
   'g_convergence'     : "gau_verytight",
   'findif'            : {'points': 5}
 }
-options_obj = Options(**options_kwargs)
 
-# 3. call optimizer
-from optavc.optimize import Optimization
-optimization_obj = Optimization(options_obj)
-optimization_obj.run()
+optavc.run_optavc("OPT", options_kwargs, restart_iteration=0)
