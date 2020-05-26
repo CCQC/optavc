@@ -1,20 +1,15 @@
-# 1. build a submit function
-import subprocess as sp
-def submit(optns):
-  sp.call([optns.program, "-i", optns.input_name, "-o", optns.output_name])
 
-# 2. build an options object
-from optavc.options import Options
 options_kwargs = {
   'template_file_path': "template.dat",
   'energy_regex'      : r"@DF-RHF Final Energy:\s+(-\d+\.\d+)",
   'success_regex'     : r"\*\*\* P[Ss][Ii]4 exiting successfully." ,
   'program'           : "psi4",
   'input_name'        : "input.dat",
-  'output_name'       : "output.dat",
-  'submitter'         : submit
+  'output_name'       : "output.dat"
 }
-options_obj = Options(**options_kwargs)
+
+from optavc import options
+options_obj = options.Options(**options_kwargs)
 
 from optavc.template import TemplateFileProcessor
 tfp = TemplateFileProcessor(open("template.dat").read(), options_obj)
