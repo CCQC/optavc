@@ -84,10 +84,9 @@ class Hessian(object):
         if sow:
             self.sow()
             self.run()
-        if self.options.cluster == "SAPELO" and self.options.wait_time > 0:
+        elif self.options.cluster == "SAPELO" and self.options.wait_time > 0:
             return self.sapelo_hessian_wait()
-        else:
-            return self.reap2()
+        return self.reap2()
 
     def reap2(self):
         """ Unsure if reap() is used by anyone / anything """
@@ -136,29 +135,43 @@ def xtpl_hessian(options, molecule, xtpl_inputs, path=".", sow=True):
                 MP2/QZ, SCF/QZ and MP2/TZ
     """
 
-    from .xtpl import xtpl_wrapper, energy_correction  # circular import fix
+    from .xtpl import xtpl_wrapper, energy_correction, order_high_low  # circular import fix
 
     hessians = []
     ref_energies = []
 
     for index, hess_obj in enumerate(xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options)):
-
         if hess_obj.options.xtpl_input_style == [2, 2]:
             separate_mp2 = 2
         else:
             separate_mp2 = 1
 
-        if index not in [0, separate_mp2]:
-            sow = False
+        if index not in [0, separate_mp2] or sow is False:
+            xtpl_sow = False
+        else:
+            xtpl_sow = True
 
-        hessian = hess_obj.compute_hessian(sow)
+        print(f"Trying to compute hessian. sow is {sow}")
+        hessian = hess_obj.compute_hessian(xtpl_sow)
         hessians.append(hessian)
         ref_energies.append(hess_obj.get_reference_energy())
 
     basis_sets = options.xtpl_basis_sets
     # Same order as in xtpl_grad()
-    final_en, final_hess, _ = energy_correction(basis_sets, hessians, ref_energies)
+    
+    #xtpl.order_high_low
+    ordered_en, ordered_hess = order_high_low(hessians, ref_energies, options.xtpl_input_style)
+    
+    final_en, final_hess, _ = energy_correction(basis_sets, ordered_hess, ordered_en)
 
+    print("\n\n=============================XTPL-HESS=============================")
+    print(f"Energies:\n {ordered_en}")
+    print(f"final_energy: {final_en}")
+    print(f"final_hess:\n {final_hess.np}")
+    print("===================================================================\n\n")
+
+    print("Any imaginary freqeuency mode warnings from psi4 should now be heeded")
+    print("All other warnings may be safely ignored")
     psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
     wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
     wfn.set_hessian(final_hess)
@@ -166,8 +179,5 @@ def xtpl_hessian(options, molecule, xtpl_inputs, path=".", sow=True):
     psi4.core.set_variable("CURRENT ENERGY", final_en)
     psi4.driver.vibanal_wfn(wfn)
     psi4.driver._hessian_write(wfn)
-
-    print(ref_energies)
-    print(final_en)
 
     return final_hess

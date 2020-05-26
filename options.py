@@ -66,16 +66,13 @@ class Options(object):
         return self._xtpl_corrections
 
     @xtpl_corrections.setter
-    def xtpl_corrections(self, vals):
-        if vals is None:
+    def xtpl_corrections(self, val):
+        if val is None:
             pass
-        elif not isinstance(vals, dict) or len(vals) > 2:
-            raise ValueError("""Can have at most two corrections for extrapolating gradients of the form
-                             {0: "string0"} or {0: r"string0", 1: r"string1"}""")
-        elif vals.get(1):
-            raise ValueError("""Whether or not corrections for the lower correlation method
-                                is needed or allowed is unclear""")
-        self._xtpl_corrections = vals
+        elif not isinstance(val, str):
+            raise ValueError(f"""Can have at most one correction for extrapolating gradients
+                             xtpl_correction: {val} should be str""")
+        self._xtpl_corrections = val
 
     @property
     def xtpl_success(self):
@@ -125,7 +122,7 @@ class Options(object):
         if templates is None:
             self._xtpl_templates = None
             self._xtpl = False
-        elif len(templates) != 4:
+        elif len(templates) != 2:
             raise ValueError("""Must provide 2 templates files to use basis set extrapolation.
                              First file must be for high correlation and must be able to pull
                              low correlation method out. Second file must perform both the large 
@@ -148,7 +145,7 @@ class Options(object):
         if basis_sets is None:
             pass
         elif len(basis_sets) != 2:
-            raise ValueError("""Improper Number of basis sets. Optavc can only utilize 3 basis sets
+            raise ValueError("""Improper Number of basis sets. Optavc can only utilize 2 basis sets
                             currently with two used for CBS extrapolation""")
         elif basis_sets[0] - basis_sets[1] != 1:
             raise ValueError("""Improper ordering of basis sets. Basis sets must be of the form \ 
@@ -172,11 +169,15 @@ class Options(object):
 
     @xtpl_input_style.setter
     def xtpl_input_style(self, vals):
-        if vals not in [[2, 2], [1, 3]]:
-            raise ValueError("""Value error cannot understand xtpl_input_style: {vals}
-                             xtpl_input_style should be [2, 2] or [1, 3]""")
-        self._xtpl_input_style = vals
+        if vals:
+            if vals not in [[2, 2], [1, 3]]:
+                raise ValueError("""Value error cannot understand xtpl_input_style: {vals}
+                                 xtpl_input_style should be [2, 2] or [1, 3]""")
 
+        elif self.xtpl is False:
+            raise ValueError("""Optavc has no default for xtpl_input_style. 
+                             Must be either [2, 2], [1, 3]""")
+        self._xtpl_input_style = vals
 
 def initialize_psi_options(kwargs):
     for key, value in kwargs.items():

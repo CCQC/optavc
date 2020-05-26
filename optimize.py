@@ -2,7 +2,7 @@ import psi4
 import numpy as np
 from .molecule import Molecule
 from .gradient import Gradient
-from .xtpl import xtpl_wrapper, energy_correction
+from .xtpl import xtpl_wrapper, energy_correction, order_high_low
 
 
 class Optimization(object):
@@ -52,7 +52,7 @@ class Optimization(object):
             slay()  # kill all workers before exiting
 
     def single_grad(self, iteration, restart_iteration, inp_file_obj=None, options=None,
-                    step_path=None, xtpl_restart=True, grad_obj=None):
+                    step_path=None, xtpl_restart=False, grad_obj=None):
         """ A standard, single gradient for an optimization.
         Parameters
         ----------
@@ -92,12 +92,19 @@ class Optimization(object):
         try:
             print(iteration)
             print(restart_iteration)
+            print(xtpl_restart)
             if iteration < restart_iteration:
+                print("Reaping gradient")
                 grad = grad_obj.reap()  # could be 1 or more  gradients
+                print(f"Reference geometry energy: {grad_obj.get_reference_energy()}")
             elif xtpl_restart:
+                print("Reaping gradient")
                 grad = grad_obj.reap()
+                print(f"Reference geometry energy: {grad_obj.get_reference_energy()}")
             else:
+                print("Computing gradient")
                 grad = grad_obj.compute_gradient()
+                print(f"Reference geometry energy: {grad_obj.get_reference_energy()}")
         except RuntimeError as e:
             if xtpl_restart:
                 print(str(e))
@@ -123,7 +130,6 @@ class Optimization(object):
 
         gradients = []
         ref_energies = []
-        scf_grad, scf_energy = 0, 0
 
         for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.reference_molecule,
                                                       self.xtpl_inputs, self.options, iteration)):
@@ -138,25 +144,28 @@ class Optimization(object):
             # want to set sow = False if iteration < restart_iteration
             # if index not in [0, 2]
             # if xtpl_restart and index == 0
-            if index not in [0, separate_mp2] or (xtpl_restart and index == 0):
-                xtpl_restart = False
-            else:
-                xtpl_restart = True
+            acceptable_index = index not in [0, separate_mp2]
+            low_corr_restart = xtpl_restart and index == 0 and iteration == restart_iteration
 
-            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_restart,
+            if acceptable_index or low_corr_restart:
+                xtpl_restart = True
+            else:
+                xtpl_restart = False
+
+            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_restart=xtpl_restart,
                                               grad_obj=grad_obj)
 
             gradients.append(grad)
             ref_energies.append(grad_obj.get_reference_energy())
 
-        gradients.append(scf_grad)
-        ref_energies.append(scf_energy)
-
         basis_sets = self.options.xtpl_basis_sets
         # These are "correlation gradients" i.e. energy_regex should correspond
         # only to correlation energy
 
-        final_en, final_grad, low_CBS_e = energy_correction(basis_sets, gradients, ref_energies)
+        # Different orders for input_styles unify back to high_corr -> low corr large_basis -> small_basis
+        ordered_en, ordered_grads = order_high_low(gradients, ref_energies, self.options.xtpl_input_style)
+        
+        final_en, final_grad, low_CBS_e = energy_correction(basis_sets, ordered_grads, ordered_en)
 
         print(
             f"\n\n=====================================xtpl=====================================\n")
@@ -164,8 +173,8 @@ class Optimization(object):
         print(f"mp2/tqz{low_CBS_e}\t\t\t using helgaker 2 pt xtpl\n\n")
         print(f"CCSD - mp2 {ref_energies[0] - ref_energies[1]}")
         print(f"xtpl energy: {final_en}")
-        print(f"energies {ref_energies}")
-        print(f"gradients {[i.np for i in gradients]}")
+        print(f"energies {ordered_en}")
+        print(f"gradients {[i.np for i in ordered_grads]}")
         print(
             f"\n=====================================xtpl=====================================\n\n")
 

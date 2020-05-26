@@ -71,8 +71,9 @@ class SinglePoint(object):
 def get_last_energy(regex_str, output_path, output_text):
     try:
         return float(re.findall(regex_str, output_text)[-1])
-    except ValueError:
+    except (ValueError, IndexError) as e:
         if regex_str == '':
             return 0.0  # Yes, yes, I'm silencing an exception no one cares
         else:
+            print(str(e))
             raise ValueError(f"Could not find energy in {output_path} using {regex_str}")
