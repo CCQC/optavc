@@ -97,9 +97,9 @@ class Hessian(object):
                 key = e.key
                 energy = e.get_energy_from_output()
                 if key == 'reference':
-                    self.findifrec['reference']['energy'] = energy[0]
+                    self.findifrec['reference']['energy'] = energy
                 else:
-                    self.findifrec['displacements'][key]['energy'] = energy[0]
+                    self.findifrec['displacements'][key]['energy'] = energy
 
         hess = psi4.driver_findif.compute_hessian_from_energies(self.findifrec, -1)
         self.hessian = psi4.core.Matrix.from_array(hess)
