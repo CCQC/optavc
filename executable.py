@@ -6,9 +6,10 @@ import re
 import subprocess
 import inspect
 
-#import vulcan.util.tty as tty
-#import vulcan
-#import vulcan.error
+
+# import vulcan.util.tty as tty
+# import vulcan
+# import vulcan.error
 
 
 class Executable(object):
@@ -109,7 +110,7 @@ class Executable(object):
 
         # if they just want to ignore one error code, make it a tuple.
         if isinstance(ignore_errors, int):
-            ignore_errors = (ignore_errors, )
+            ignore_errors = (ignore_errors,)
 
         quoted_args = [arg for arg in args if re.search(r'^"|^\'|"$|\'$', arg)]
         if quoted_args:
@@ -154,7 +155,7 @@ class Executable(object):
             if fail_on_error:
                 raise RuntimeError(
                     str(e), "\nExit status %d when invoking command: %s" %
-                    (proc.returncode, cmd_line))
+                            (proc.returncode, cmd_line))
 
         finally:
             if close_ostream: output.close()
@@ -168,7 +169,7 @@ class Executable(object):
         return not (self == other)
 
     def __hash__(self):
-        return hash((type(self), ) + tuple(self.exe))
+        return hash((type(self),) + tuple(self.exe))
 
     def __repr__(self):
         return "<exe: %s>" % self.exe
@@ -198,12 +199,11 @@ def which(name, **kwargs):
 
 
 if __name__ == "__main__":
-
     print(which("ls"))
 
     ls = Executable("ls")
     result = ls("-l", output=str)
     print(result)
 
-    #vulcan = Executable("/opt/vulcan/bin/vulcan")
-    #vulcan('submit','-h')
+    # vulcan = Executable("/opt/vulcan/bin/vulcan")
+    # vulcan('submit','-h')
