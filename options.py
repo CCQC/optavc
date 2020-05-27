@@ -161,6 +161,8 @@ class Options(object):
         if vals:
             if self.cluster != "SAPELO" or self.xtpl is False:
                 raise ValueError(f"Cannot use xtpl_wait_times with current cluster {self.cluster}")
+            elif len(vals) != 2:
+                raise ValueError(f"Only 2 waiting periods possible")
         self._xtpl_wait_times = vals
 
     @property
