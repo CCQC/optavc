@@ -1,6 +1,8 @@
 import psi4
 import os
 from typing import Union
+
+
 # from .dask_iface import connect_Client
 
 
@@ -28,10 +30,11 @@ class Options(object):
         self.email = kwargs.pop("email", None)
         self.email_opts = kwargs.pop("email_opts", 'ae')
         self.memory = kwargs.pop("memory", "")
-        self.cluster = kwargs.pop("cluster", "")
+        self.cluster = kwargs.pop("cluster", "").upper()
         self.name = kwargs.pop("name", "")
         self.resub_job = kwargs.pop("resub_job","")
         self.resub = kwargs.pop("resub_job",False)
+        self.wait_time = kwargs.pop("wait_time", None)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
         self.xtpl_programs = kwargs.pop("xtpl_programs", None)
@@ -39,6 +42,8 @@ class Options(object):
         self.xtpl_success = kwargs.pop("xtpl_success", None)
         self.xtpl_energy = kwargs.pop("xtpl_energy", None)
         self.xtpl_corrections = kwargs.pop("xtpl_corrections", None)
+        self.xtpl_wait_times = kwargs.pop("xtpl_wait_times", None)
+        self.xtpl_input_style = kwargs.pop("xtpl_input_style", None)
 
         if self.mpi is not None:
             # from .mpi4py import compute
@@ -48,47 +53,57 @@ class Options(object):
         initialize_psi_options(kwargs)
 
     @property
+    def wait_time(self):
+        return self._wait_time
+
+    @wait_time.setter
+    def wait_time(self, val):
+        if val:
+            if self.cluster != 'SAPELO':
+                raise ValueError(f"Cannot use 'wait_time' with current cluster {self.cluster}")
+        self._wait_time = val
+
+    @property
     def xtpl_corrections(self) -> Union[tuple, list]:
         return self._xtpl_corrections
 
     @xtpl_corrections.setter
-    def xtpl_corrections(self, vals):
-        if vals is None:
+    def xtpl_corrections(self, val):
+        if val is None:
             pass
-        elif not isinstance(vals, dict) or len(vals) > 2:
-            raise ValueError("""Can have at most two corrections for extrapolating gradients of the form
-                             {0: "string0"} or {0: r"string0", 1: r"string1"}""")
-        self._xtpl_corrections = vals
-        
+        elif not isinstance(val, str):
+            raise ValueError(f"""Can have at most one correction for extrapolating gradients
+                             xtpl_correction: {val} should be str""")
+        self._xtpl_corrections = val
 
     @property
     def xtpl_success(self):
         return self._xtpl_success
-    
+
     @xtpl_success.setter
     def xtpl_success(self, regex_strs: Union[None, list]):
         if regex_strs is None:
             pass
-        elif len(regex_strs) != len (self.xtpl_programs):
+        elif len(regex_strs) != len(self.xtpl_programs):
             raise ValueError("Number of success strings does not match number of programs")
         self._xtpl_success = regex_strs
-    
+
     @property
     def xtpl_energy(self):
         return self._xtpl_energy
-    
+
     @xtpl_energy.setter
     def xtpl_energy(self, energy_strs: Union[None, list]):
         if energy_strs is None:
             pass
-        elif len(energy_strs) != 3:
-            raise ValueError("Need three regex strings for xtpl calculation")
+        elif len(energy_strs) != 5:
+            raise ValueError("Need five regex strings for xtpl calculation")
         self._xtpl_energy = energy_strs
-    
+
     @property
     def xtpl_programs(self):
         return self._xtpl_programs
-    
+
     @xtpl_programs.setter
     def xtpl_programs(self, programs: Union[None, list]):
         if programs is None:
@@ -99,40 +114,44 @@ class Options(object):
             raise ValueError("Can not understand the number of programs specified")
         else:
             self._xtpl_programs = programs
-    
+
     @property
     def xtpl_templates(self):
         return self._xtpl_templates
-    
+
     @xtpl_templates.setter
     def xtpl_templates(self, templates: Union[None, list]):
         if templates is None:
             self._xtpl_templates = None
-            self._xtpl = False    
-        elif len(templates) != 4:
-            raise ValueError("Must provide 4 templates files to use basis set extrapolation.")
+            self._xtpl = False
+        elif len(templates) != 2:
+            raise ValueError("""Must provide 2 templates files to use basis set extrapolation.
+                             First file must be for high correlation and must be able to pull
+                             low correlation method out. Second file must perform both the large 
+                             basis and intermediate basis calculation and print the correlation
+                             energies""")
         else:
             for item in templates:
                 if templates.count(item) != 1:
                     raise ValueError("Template files provided are not unique.")
-        
+
             self._xtpl_templates = templates
             self.xtpl = True
-    
+
     @property
     def xtpl_basis_sets(self):
         return self._xtpl_basis_sets
-    
+
     @xtpl_basis_sets.setter
     def xtpl_basis_sets(self, basis_sets: Union[None, list]):
         if basis_sets is None:
             pass
-        elif len(basis_sets) != 3:
-            raise ValueError("""Improper Number of basis sets. Optavc can only utilize 3 basis sets currently \
-                             with two used for CBS extrapolation""")
-        elif basis_sets[0] - basis_sets[1] != 1 or basis_sets[1] - basis_sets[2] != 1:
-            raise ValueError("""Improper ordering of basis sets. Basis sets must be of the form [4, 3, 2] to request a \
-                             [T,Q]Z gradient from a DZ gradient""")
+        elif len(basis_sets) != 2:
+            raise ValueError("""Improper Number of basis sets. Optavc can only utilize 2 basis sets
+                            currently with two used for CBS extrapolation""")
+        elif basis_sets[0] - basis_sets[1] != 1:
+            raise ValueError("""Improper ordering of basis sets. Basis sets must be of the form \ 
+                             [4, 3] to request a [T,Q]Z gradient""")
         self._xtpl_basis_sets = basis_sets
 
     @property
@@ -142,6 +161,33 @@ class Options(object):
     @resub_job.setter
     def resub_job(self, job_number):
         self._resub_job = job_number
+    def xtpl_wait_times(self):
+        return self._xtpl_wait_times
+
+    @xtpl_wait_times.setter
+    def xtpl_wait_times(self, vals: Union[None, list]):
+        if vals:
+            if self.cluster != "SAPELO" or self.xtpl is False:
+                raise ValueError(f"Cannot use xtpl_wait_times with current cluster {self.cluster}")
+            elif len(vals) != 2:
+                raise ValueError(f"Only 2 waiting periods possible")
+        self._xtpl_wait_times = vals
+
+    @property
+    def xtpl_input_style(self):
+        return self._xtpl_input_style
+
+    @xtpl_input_style.setter
+    def xtpl_input_style(self, vals):
+        if vals:
+            if vals not in [[2, 2], [1, 3]]:
+                raise ValueError("""Value error cannot understand xtpl_input_style: {vals}
+                                 xtpl_input_style should be [2, 2] or [1, 3]""")
+
+        elif self.xtpl is False:
+            raise ValueError("""Optavc has no default for xtpl_input_style. 
+                             Must be either [2, 2], [1, 3]""")
+        self._xtpl_input_style = vals
 
 def initialize_psi_options(kwargs):
     for key, value in kwargs.items():
@@ -162,6 +208,7 @@ def initialize_psi_options(kwargs):
                         str(subvalue).upper()))
             except:
                 raise Exception(
-                    "Attempt to set local psi4 option {:s} with {:s} failed.".format(key, str(value)))
+                    "Attempt to set local psi4 option {:s} with {:s} failed.".format(key,
+                                                                                     str(value)))
         else:
             raise Exception("Unrecognized keyword {:s}".format(str(key)))

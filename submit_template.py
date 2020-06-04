@@ -53,12 +53,11 @@ time {cline}
 """
 
 progdict = {
-        "molpro":"molpro -n $NSLOTS --nouse-logfile --no-xml-output -o output.dat input.dat",
-        "psi4":"psi4 -n $NSLOTS"
+    "molpro": "molpro -n $NSLOTS --nouse-logfile --no-xml-output -o output.dat input.dat",
+    "psi4": "psi4 -n $NSLOTS"
 }
 
 sapelo_mod_load = {
-	"molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin/",
-	"psi4": "module load psi4/1.3.2_conda"
+    "molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin/",
+    "psi4": "module load PSI4/1.3.2_conda"
 }
-

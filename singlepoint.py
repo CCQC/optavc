@@ -45,25 +45,26 @@ class SinglePoint(object):
         submitter.submit(self.options)
         os.chdir(working_directory)
 
-    def get_energy_from_output(self) -> list:
-        output_path = os.path.join(self.path, self.options.output_name)
-        output_text = open(output_path).read()
+    def get_energy_from_output(self):
 
-        energy = []
+        try:
+            output_path = os.path.join(self.path, self.options.output_name)
+            output_text = open(output_path).read()
+        except FileNotFoundError as e:
+            print(str(e))
+            print("Could not open output file")
+            raise
+
         if re.search(self.options.success_regex, output_text):
-            if not isinstance(self.options.energy_regex, list):
-                self.options.energy_regex = [self.options.energy_regex]
 
-            for energy_str in self.options.energy_regex:
-                energy.append(get_last_energy(energy_str, output_path, output_text))
-            
+            energy = get_last_energy(self.options.energy_regex, output_path, output_text)
+
             correction = sum(get_last_energy(correction_regex, output_path, output_text)
                              for correction_regex in self.options.correction_regexes)
-            
-            energy[0] += correction # If no correction, adding zero. Add to correlation energy if 2 energies 
-            
-            return energy
+            # If no correction, adding zero. Add to correlation energy if 2 energies
+            return energy + correction
         else:
+            print("Could not find success string in output.dat")
             raise RuntimeError("SinglePoint job at {:s} failed.".format(output_path))
 
     def check_success(self):
@@ -74,8 +75,9 @@ class SinglePoint(object):
 def get_last_energy(regex_str, output_path, output_text):
     try:
         return float(re.findall(regex_str, output_text)[-1])
-    except ValueError:
+    except (ValueError, IndexError) as e:
         if regex_str == '':
-            return 0.0   # Yes, yes, I'm silencing an exception no one cares
+            return 0.0  # Yes, yes, I'm silencing an exception no one cares
         else:
+            print(str(e))
             raise ValueError(f"Could not find energy in {output_path} using {regex_str}")
