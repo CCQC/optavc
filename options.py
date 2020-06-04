@@ -30,6 +30,8 @@ class Options(object):
         self.memory = kwargs.pop("memory", "")
         self.cluster = kwargs.pop("cluster", "")
         self.name = kwargs.pop("name", "")
+        self.resub_job = kwargs.pop("resub_job","")
+        self.resub = kwargs.pop("resub_job",False)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
         self.xtpl_programs = kwargs.pop("xtpl_programs", None)
@@ -133,6 +135,13 @@ class Options(object):
                              [T,Q]Z gradient from a DZ gradient""")
         self._xtpl_basis_sets = basis_sets
 
+    @property
+    def resub_job(self):
+        return self.resub_job
+
+    @resub_job.setter
+    def resub_job(self, job_number):
+        self._resub_job = job_number
 
 def initialize_psi_options(kwargs):
     for key, value in kwargs.items():

@@ -66,6 +66,10 @@ class SinglePoint(object):
         else:
             raise RuntimeError("SinglePoint job at {:s} failed.".format(output_path))
 
+    def check_success(self):
+        output_path = os.path.join(self.path, self.options.output_name)
+        output_text = open(output_path).read()
+        return re.search(self.options.success_regex, output_text)
 
 def get_last_energy(regex_str, output_path, output_text):
     try:

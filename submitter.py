@@ -48,7 +48,9 @@ def make_sub_script(options):
     elif options.cluster.upper() != 'VULCAN':
         print("No cluster provided or cluster not yet supported.")
         print("Trying to continue by defaulting to Vulcan")
-   
     odict.update({'tc': str(job_num)})
-    out = submit_template.vulcan_template.format(**odict)
+    if options.job_array:
+        out = submit_template.vulcan_template.format(**odict)
+    else:
+        out = submit_template_sp.vulcan_template.format(**odict)
     return out

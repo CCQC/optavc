@@ -83,6 +83,9 @@ class Gradient(object):
             singlepoint.write_input()
 
     def reap(self):
+        if self.options.resub:
+            self.collect_failures()
+            self.rerun_failures()
 
         if self.options.mpi:
             for idx, e in enumerate(self.singlepoints):
@@ -119,6 +122,19 @@ class Gradient(object):
     def run_individual(self):
         for singlepoint in self.singlepoints:
             singlepoint.run()
+    
+    def collect_failures(self):
+        self.failed_sp = []
+        for singlepoint in self.singlepoints:
+            if not singlepoint.check_success():
+                self.failed_sp.append(singlepoint)
+
+    def rerun_failures(self):
+        self.buff = self.options.job_array
+        self.options.job_array = False
+        for failed_sp in self.failed_sp:
+            failed_sp.run()
+        self.options.job_array = self.buff
 
     def run(self):
 
