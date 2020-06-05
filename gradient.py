@@ -103,9 +103,13 @@ class Gradient(object):
     def collect_failures(self):
         self.failed_sp = []
         for singlepoint in self.singlepoints:
+            # This if statement is only here for testing purposes
             if self.options.resub_test:
                 singlepoint.insert_Giraffe()
-            if not singlepoint.check_success() or singlepoint.check_resub():
+                if singlepoint.check_resub():
+                    self.failed_sp.append(singlepoint)
+            # This if statement will be used for most optimizations
+            if not singlepoint.check_success():
                 self.failed_sp.append(singlepoint)
 
     def rerun_failures(self):
