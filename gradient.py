@@ -68,9 +68,9 @@ class Gradient(object):
             singlepoint.write_input()
 
     def reap(self):
-        if self.options.resub:
-            self.collect_failures()
-            self.rerun_failures()
+        # if self.options.resub:
+            # self.collect_failures()
+            # self.rerun_failures()
 
         if self.options.mpi:
             for idx, e in enumerate(self.singlepoints):
@@ -103,7 +103,9 @@ class Gradient(object):
     def collect_failures(self):
         self.failed_sp = []
         for singlepoint in self.singlepoints:
-            if not singlepoint.check_success():
+            if self.options.resub_test:
+                singlepoint.insert_Giraffe()
+            if not singlepoint.check_success() or singlepoint.check_resub():
                 self.failed_sp.append(singlepoint)
 
     def rerun_failures(self):
@@ -135,7 +137,9 @@ class Gradient(object):
     def compute_gradient(self):
         self.sow()
         self.run()
-
+        if self.options.resub:
+            self.collect_failures()
+            self.rerun_failures()
         if self.options.cluster == 'SAPELO':
             return self.sapelo_gradient_wait()
         else:

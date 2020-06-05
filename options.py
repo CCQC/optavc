@@ -14,6 +14,7 @@ class Options(object):
         self.success_regex = kwargs.pop("success_regex", "")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
         self.fail_regex = kwargs.pop("fail_regex", "")
+        self.resub_regex = kwargs.pop("resub_regex", "")
         self.time_limit = kwargs.pop("time_limit", None)
         self.program = kwargs.pop("program", "")
         self.input_name = kwargs.pop("input_name", "input.dat")
@@ -32,8 +33,8 @@ class Options(object):
         self.memory = kwargs.pop("memory", "")
         self.cluster = kwargs.pop("cluster", "").upper()
         self.name = kwargs.pop("name", "")
-        self.resub_job = kwargs.pop("resub_job","")
-        self.resub = kwargs.pop("resub_job",False)
+        self.resub = kwargs.pop("resub",False)
+        self.resub_test = kwargs.pop("resub_test",False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
@@ -155,12 +156,6 @@ class Options(object):
         self._xtpl_basis_sets = basis_sets
 
     @property
-    def resub_job(self):
-        return self.resub_job
-
-    @resub_job.setter
-    def resub_job(self, job_number):
-        self._resub_job = job_number
     def xtpl_wait_times(self):
         return self._xtpl_wait_times
 

@@ -17,7 +17,8 @@ class SinglePoint(object):
         self.dict['path'] = self.path
         self.dict['options'] = {}
         # for i in self.options:
-        self.dict['options']['command'] = self.options.command
+        if self.options.mpi is not None:
+            self.dict['options']['command'] = self.options.command
         # self.dict['options']['prep_cmd'] = self.options.prep_cmd
         self.dict['options']['output_name'] = self.options.output_name
         self.dict['options']['energy_regex'] = self.options.energy_regex
@@ -71,6 +72,19 @@ class SinglePoint(object):
         output_path = os.path.join(self.path, self.options.output_name)
         output_text = open(output_path).read()
         return re.search(self.options.success_regex, output_text)
+    
+    # These two functions are purely here for the testing of the resub functionality
+    def check_resub(self):
+        output_path = os.path.join(self.path, self.options.output_name)
+        output_text = open(output_path).read()
+        return re.search(self.options.resub_regex, output_text)
+    
+    def insert_Giraffe(self):
+        output_path = os.path.join(self.path, self.options.output_name)
+        output_text = open(output_path).read()
+        output_text += 'Giraffe'
+        with open(output_path,'w') as file:
+            file.writelines(output_text)
 
 def get_last_energy(regex_str, output_path, output_text):
     try:
