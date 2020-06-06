@@ -68,10 +68,18 @@ class SinglePoint(object):
             print("Could not find success string in output.dat")
             raise RuntimeError("SinglePoint job at {:s} failed.".format(output_path))
 
-    def check_success(self):
-        output_path = os.path.join(self.path, self.options.output_name)
-        output_text = open(output_path).read()
-        return re.search(self.options.success_regex, output_text)
+    def check_success(self, return_text=False):
+        try:
+            output_path = os.path.join(self.path, self.options.output_name)
+            output_text = open(output_path).read()
+        except FileNotFoundError as e:
+            print(str(e))
+            print("Could not open output file")
+            raise
+        check = re.search(self.options.success_regex, output_text)
+        if return_text:
+            return check, output_text
+        return check
     
     # These two functions are purely here for the testing of the resub functionality
     def check_resub(self):
