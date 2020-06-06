@@ -29,13 +29,6 @@ class Optimization(object):
             # put the gradient, energy, and molecule for the current step in psi::Environment
             # before calling psi4.optking()
             
-            
-            # Implement email code here
-            # if self.options.email is not None:
-                # a
-            
-            
-            
             psi4.core.set_gradient(grad)
             psi4.core.set_variable('CURRENT ENERGY', ref_energy)
             psi4_mol_obj = self.reference_molecule.cast_to_psi4_molecule_object()
