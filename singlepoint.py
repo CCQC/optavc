@@ -17,7 +17,8 @@ class SinglePoint(object):
         self.dict['path'] = self.path
         self.dict['options'] = {}
         # for i in self.options:
-        self.dict['options']['command'] = self.options.command
+        if self.options.mpi is not None:
+            self.dict['options']['command'] = self.options.command
         # self.dict['options']['prep_cmd'] = self.options.prep_cmd
         self.dict['options']['output_name'] = self.options.output_name
         self.dict['options']['energy_regex'] = self.options.energy_regex
@@ -67,6 +68,47 @@ class SinglePoint(object):
             print("Could not find success string in output.dat")
             raise RuntimeError("SinglePoint job at {:s} failed.".format(output_path))
 
+    def check_success(self, return_text=False):
+        try:
+            output_path = os.path.join(self.path, self.options.output_name)
+            output_text = open(output_path).read()
+        except FileNotFoundError as e:
+            print(str(e))
+            print("Could not open output file")
+            raise
+        check = re.search(self.options.success_regex, output_text)
+        if return_text:
+            return check, output_text
+        return check
+    
+    # These two functions are purely here for the testing of the resub functionality
+    def check_resub(self):
+        """ Check/test the resubmission feature. Searches for the 'Giraffe' inserted by 'insert_Giraffe' function.
+        Parameters
+        ----------
+        N/A
+        Returns
+        -------
+        bool
+        """
+        output_path = os.path.join(self.path, self.options.output_name)
+        output_text = open(output_path).read()
+        return re.search('Giraffe', output_text)
+    
+    def insert_Giraffe(self):
+        """ Inserts the string 'Giraffe' into all output files. Useful for testing regex dependent methods as a proof of concept.
+        Parameters
+        ----------
+        N/A
+        Returns
+        -------
+        N/A, all it does is insert 'Giraffe' into the output text. Trust me, it's useful.
+        """
+        output_path = os.path.join(self.path, self.options.output_name)
+        output_text = open(output_path).read()
+        output_text += 'Giraffe'
+        with open(output_path,'w') as file:
+            file.writelines(output_text)
 
 def get_last_energy(regex_str, output_path, output_text):
     try:
