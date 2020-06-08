@@ -83,11 +83,27 @@ class SinglePoint(object):
     
     # These two functions are purely here for the testing of the resub functionality
     def check_resub(self):
+        """ Check/test the resubmission feature. Searches for the 'Giraffe' inserted by 'insert_Giraffe' function.
+        Parameters
+        ----------
+        N/A
+        Returns
+        -------
+        bool
+        """
         output_path = os.path.join(self.path, self.options.output_name)
         output_text = open(output_path).read()
-        return re.search(self.options.resub_regex, output_text)
+        return re.search('Giraffe', output_text)
     
     def insert_Giraffe(self):
+        """ Inserts the string 'Giraffe' into all output files. Useful for testing regex dependent methods as a proof of concept.
+        Parameters
+        ----------
+        N/A
+        Returns
+        -------
+        N/A, all it does is insert 'Giraffe' into the output text. Trust me, it's useful.
+        """
         output_path = os.path.join(self.path, self.options.output_name)
         output_text = open(output_path).read()
         output_text += 'Giraffe'

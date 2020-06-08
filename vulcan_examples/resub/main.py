@@ -4,7 +4,6 @@ options_kwargs = {
   'template_file_path': "template.dat",
   'energy_regex'      : r"@DF-RHF Final Energy:\s+(-\d+\.\d+)",
   'success_regex'     : r"\*\*\* P[Ss][Ii]4 exiting successfully." ,
-  'resub_regex'       : r"Giraffe" ,
   'queue'             : "gen3.q",
   'program'           : "psi4@master",
   'input_name'        : "input.dat",

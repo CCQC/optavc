@@ -14,7 +14,6 @@ class Options(object):
         self.success_regex = kwargs.pop("success_regex", "")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
         self.fail_regex = kwargs.pop("fail_regex", "")
-        self.resub_regex = kwargs.pop("resub_regex", "")
         self.time_limit = kwargs.pop("time_limit", None)
         self.program = kwargs.pop("program", "")
         self.input_name = kwargs.pop("input_name", "input.dat")
