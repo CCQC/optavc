@@ -10,7 +10,11 @@ from .submitter import submit
 
 
 class Gradient(object):
-    def __init__(self, molecule, inp_file_obj, options, path="."):
+    def __init__(self, molecule, inp_file_obj, options, path=".", name=''):
+        
+        if name:
+            print(f"Creating gradient object {name}")
+
         self.molecule = molecule
         self.inp_file_obj = inp_file_obj
         self.options = options
@@ -20,6 +24,7 @@ class Gradient(object):
         self.energies = None
         self.gradient = None
         self.make_singlepoints()
+        self.name = name
 
     def make_singlepoints(self):
         """ Use psi4's finite diff machinery to create dispalcements and singlepoints """
@@ -28,7 +33,7 @@ class Gradient(object):
         if self.options.point_group is not None:
             psi4_mol_obj.reset_point_group(self.options.point_group)
 
-        self.findifrec = psi4.driver_findif.gradient_from_energy_geometries(psi4_mol_obj)
+        self.findifrec = psi4.driver_findif.gradient_from_energies_geometries(psi4_mol_obj)
 
         ref_molecule = self.molecule.copy()
         ref_path = os.path.join(self.path, "{:d}".format(1))
@@ -68,7 +73,7 @@ class Gradient(object):
             singlepoint.write_input()
 
     def reap(self):
-
+        print(f"Reaping gradient {self.name}")
         if self.options.mpi:
             for idx, e in enumerate(self.singlepoints):
                 key = e.key
@@ -87,7 +92,7 @@ class Gradient(object):
                     self.findifrec['displacements'][key]['energy'] = energy
 
         psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
-        self.gradient = psi4.driver.driver_findif.compute_gradient_from_energies(self.findifrec)
+        self.gradient = psi4.driver.driver_findif.assemble_gradient_from_energies(self.findifrec)
         # convert from numpy array to matrix
         self.gradient = psi4.core.Matrix.from_array(self.gradient)
 
@@ -98,7 +103,7 @@ class Gradient(object):
             singlepoint.run()
 
     def run(self):
-
+        print(f"Running gradient {self.name}")
         if self.options.mpi:  # compute in MPI mode
             from .mpi4py_iface import master, to_dict, compute
             _singlepoints = to_dict(self.singlepoints)

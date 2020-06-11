@@ -14,7 +14,7 @@ def submit(options):
 
     with open('optstep.sh', 'w') as f:
         f.write(out)
-    subprocess.call('qsub optstep.sh', shell=True)
+    subprocess.call('qsub optstep.sh', stderr=sys.stdout.buffer, shell=True)
 
 
 def make_sub_script(options):

@@ -23,7 +23,7 @@ class Hessian(object):
     def make_singlepoints(self):
         """ Use psi4's finite diff machinery to create dispalcements and singlepoints """
         psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
-        self.findifrec = psi4.driver_findif.hessian_from_energy_geometries(psi4_mol_obj, -1)
+        self.findifrec = psi4.driver_findif.hessian_from_energies_geometries(psi4_mol_obj, -1)
 
         ref_molecule = self.molecule.copy()
         ref_path = os.path.join(self.path, "{:d}".format(1))
@@ -100,7 +100,7 @@ class Hessian(object):
                 else:
                     self.findifrec['displacements'][key]['energy'] = energy
 
-        hess = psi4.driver_findif.compute_hessian_from_energies(self.findifrec, -1)
+        hess = psi4.driver_findif.assemble_hessian_from_energies(self.findifrec, -1)
         self.hessian = psi4.core.Matrix.from_array(hess)
         # Could we get the global_option basis? Yes.
         # Would we need to set it, just for this? Yes.

@@ -1,5 +1,7 @@
-import shutil, os
-import re
+import shutil, os, re
+
+import psi4
+
 from optavc.options import Options
 from . import optimize
 from . import hessian
@@ -59,6 +61,8 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
     """
 
     options_obj = Options(**options_dict)
+
+    psi4.core.clean() 
 
     if options_obj.xtpl:
         tfps = [TemplateFileProcessor(open(i).read(), options_obj) for i in

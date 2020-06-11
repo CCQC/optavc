@@ -31,11 +31,16 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
         # Need to do: (CCSD, (T) correction), MP2
         #             MP2/QZ, SCF/QZ and MP2/TZ
         # reorder energy regex to match internal order above
+        names = ["high corr small basis", "low corr small basis", "low corr large basis",
+                 "SCF large basis", "low corr medium basis"]
         ordered_E_regexes = [xtpl_regs[0], xtpl_regs[3], xtpl_regs[1], xtpl_regs[4], xtpl_regs[2]]
         separate_mp2 = 2
     else:
         # (CCSD, (T) correction)
         # MP2/QZ, SCF/QZ, MP2/TZ, MP2/DZ
+        
+        names = ["high corr small basis", "low corr large basis", "SCF large basis", 
+                 "low corr medium basis", "low corr small basis"]
         ordered_E_regexes = [xtpl_regs[0], xtpl_regs[1], xtpl_regs[4], xtpl_regs[2], xtpl_regs[3]]
         separate_mp2 = 1
 
@@ -65,7 +70,7 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
 
         if job_type.upper() == 'GRADIENT':
             step_path = f"STEP{iteration:>02d}/{path_additions[corl_index]}"
-            grad_obj = Gradient(molecule, inp_file_obj, options, step_path)
+            grad_obj = Gradient(molecule, inp_file_obj, options, step_path, name=names[index])
             derivative_calcs.append(grad_obj)
         elif job_type.upper() == "HESSIAN":
             path = f"./XTPL/{path_additions[corl_index]}"
