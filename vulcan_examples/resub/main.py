@@ -10,6 +10,8 @@ options_kwargs = {
   'output_name'       : "output.dat",
   'maxiter'           : 20,
   'job_array'         : True,
+  'resub'             : True,
+  'resub_test'        : True,
   'cluster'           : 'Vulcan',
   # 'g_convergence'     : "gau_verytight",
   # 'findif'            : {'points': 5}

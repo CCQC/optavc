@@ -32,6 +32,8 @@ class Options(object):
         self.memory = kwargs.pop("memory", "")
         self.cluster = kwargs.pop("cluster", "").upper()
         self.name = kwargs.pop("name", "")
+        self.resub = kwargs.pop("resub",False)
+        self.resub_test = kwargs.pop("resub_test",False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
