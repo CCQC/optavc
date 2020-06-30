@@ -30,17 +30,12 @@ class Optimization(object):
             # put the gradient, energy, and molecule for the current step in psi::Environment
             # before calling psi4.optking()
             try:
-                print("Setting gradient and updating molecule")
-                print(f"Calling psi4.core.set_gradient {grad.np}")
                 psi4.core.set_gradient(grad)
-                print(f"Calling psi4.core.set variable energy {ref_energy}")
                 psi4.core.set_variable('CURRENT ENERGY', ref_energy)
                 psi4_mol_obj = self.reference_molecule.cast_to_psi4_molecule_object()
                 if self.options.point_group is not None:  # otherwise autodetect
                     psi4_mol_obj.reset_point_group(self.options.point_group)
-                print("Setting legacy molecule")
                 psi4.core.set_legacy_molecule(psi4_mol_obj)
-                print("Getting exit code and calling optking")            
                 optking_exit_code = psi4.core.optking()
                 # optking has put the next step geometry in psi::Environment,
                 # so we can grab a copy and cast it
@@ -58,7 +53,6 @@ class Optimization(object):
             except Exception as e:
                 print("An errror was encountered while using psi4 to take a step")
                 print(str(e))
-                raise RuntimeError from e                
         if self.options.mpi:
             from .mpi4py_iface import slay
             slay()  # kill all workers before exiting
