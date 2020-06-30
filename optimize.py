@@ -22,7 +22,6 @@ class Optimization(object):
             print(f"Beginning step {iteration}") 
             if self.options.xtpl:
                 # Calls single_grad repeatedly
-                print("Calling xtpl_grad")
                 ref_energy, grad = self.xtpl_grad(iteration, restart_iteration, xtpl_restart)
             else:
                 grad, grad_obj = self.single_grad(iteration, restart_iteration)
@@ -41,7 +40,6 @@ class Optimization(object):
                 # so we can grab a copy and cast it
                 # from psi4.Molecule() to Molecule()
                 self.reference_molecule = Molecule(psi4.core.get_legacy_molecule())
-                print("Checking exit codes")
                 if optking_exit_code == psi4.core.PsiReturnType.EndLoop:
                     psi4.core.print_out("Optimizer: Optimization complete!")
                     break
