@@ -32,7 +32,8 @@ def make_sub_script(options):
         'jarray': '1-{}'.format(job_num),
         'progname': progname,
         'prog': prog,
-        'cline': submit_template.progdict[progname]
+        'cline': submit_template.progdict[progname],
+        'name': options.name
     }
 
     if options.cluster.upper() == 'SAPELO':
@@ -40,8 +41,7 @@ def make_sub_script(options):
                       'email': options.email,
                       'email_opts': options.email_opts,
                       'memory': options.memory,
-                      'time': options.time_limit,
-                      'name': options.name
+                      'time': options.time_limit
                       })
         out = submit_template.sapelo_template.format(**odict)
         return out

@@ -31,7 +31,7 @@ class Options(object):
         self.email_opts = kwargs.pop("email_opts", 'ae')
         self.memory = kwargs.pop("memory", "")
         self.cluster = kwargs.pop("cluster", "").upper()
-        self.name = kwargs.pop("name", "")
+        self.name = kwargs.pop("name", "STEP")
         self.wait_time = kwargs.pop("wait_time", None)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)

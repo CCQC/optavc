@@ -19,34 +19,46 @@ class Optimization(object):
             self.step_molecules.append(self.reference_molecule)
             # compute the gradient for the current molecule --
             # the path for gradient computation is set to "STEP0x"
-
+            print(f"Beginning step {iteration}") 
             if self.options.xtpl:
                 # Calls single_grad repeatedly
+                print("Calling xtpl_grad")
                 ref_energy, grad = self.xtpl_grad(iteration, restart_iteration, xtpl_restart)
             else:
                 grad, grad_obj = self.single_grad(iteration, restart_iteration)
                 ref_energy = grad_obj.get_reference_energy()
             # put the gradient, energy, and molecule for the current step in psi::Environment
             # before calling psi4.optking()
-            psi4.core.set_gradient(grad)
-            psi4.core.set_variable('CURRENT ENERGY', ref_energy)
-            psi4_mol_obj = self.reference_molecule.cast_to_psi4_molecule_object()
-            if self.options.point_group is not None:  # otherwise autodetect
-                psi4_mol_obj.reset_point_group(self.options.point_group)
-            psi4.core.set_legacy_molecule(psi4_mol_obj)
-            optking_exit_code = psi4.core.optking()
-            # optking has put the next step geometry in psi::Environment,
-            # so we can grab a copy and cast it
-            # from psi4.Molecule() to Molecule()
-            self.reference_molecule = Molecule(psi4.core.get_legacy_molecule())
-            if optking_exit_code == psi4.core.PsiReturnType.EndLoop:
-                psi4.core.print_out("Optimizer: Optimization complete!")
-                break
-            elif optking_exit_code == psi4.core.PsiReturnType.Failure:
-                raise Exception("Optimizer: Optimization failed!")
-            # We finished a step. Certainly, hessian reading should be disabled now!
-            psi4.core.set_local_option('OPTKING', 'CART_HESS_READ', False)
-        psi4.core.set_legacy_molecule(None)
+            try:
+                print("Setting gradient and updating molecule")
+                print(f"Calling psi4.core.set_gradient {grad.np}")
+                psi4.core.set_gradient(grad)
+                print(f"Calling psi4.core.set variable energy {ref_energy}")
+                psi4.core.set_variable('CURRENT ENERGY', ref_energy)
+                psi4_mol_obj = self.reference_molecule.cast_to_psi4_molecule_object()
+                if self.options.point_group is not None:  # otherwise autodetect
+                    psi4_mol_obj.reset_point_group(self.options.point_group)
+                print("Setting legacy molecule")
+                psi4.core.set_legacy_molecule(psi4_mol_obj)
+                print("Getting exit code and calling optking")            
+                optking_exit_code = psi4.core.optking()
+                # optking has put the next step geometry in psi::Environment,
+                # so we can grab a copy and cast it
+                # from psi4.Molecule() to Molecule()
+                self.reference_molecule = Molecule(psi4.core.get_legacy_molecule())
+                print("Checking exit codes")
+                if optking_exit_code == psi4.core.PsiReturnType.EndLoop:
+                    psi4.core.print_out("Optimizer: Optimization complete!")
+                    break
+                elif optking_exit_code == psi4.core.PsiReturnType.Failure:
+                    raise Exception("Optimizer: Optimization failed!")
+                # We finished a step. Certainly, hessian reading should be disabled now!
+                psi4.core.set_local_option('OPTKING', 'CART_HESS_READ', False)
+                psi4.core.set_legacy_molecule(None)
+            except Exception as e:
+                print("An errror was encountered while using psi4 to take a step")
+                print(str(e))
+                raise RuntimeError from e                
         if self.options.mpi:
             from .mpi4py_iface import slay
             slay()  # kill all workers before exiting
@@ -82,6 +94,8 @@ class Optimization(object):
                 options = self.options
             if step_path is None:
                 step_path = f"STEP{iteration:>02d}"
+            
+            options.name = f"{options.name}--{iteration:02d}"
 
             grad_obj = Gradient(self.reference_molecule, inp_file_obj, options, step_path)
 
@@ -90,21 +104,12 @@ class Optimization(object):
         # Then consider if the we're rechecking the same input file in xtpl procedure
 
         try:
-            print(iteration)
-            print(restart_iteration)
-            print(xtpl_restart)
             if iteration < restart_iteration:
-                print("Reaping gradient")
                 grad = grad_obj.reap()  # could be 1 or more  gradients
-                print(f"Reference geometry energy: {grad_obj.get_reference_energy()}")
             elif xtpl_restart:
-                print("Reaping gradient")
                 grad = grad_obj.reap()
-                print(f"Reference geometry energy: {grad_obj.get_reference_energy()}")
             else:
-                print("Computing gradient")
                 grad = grad_obj.compute_gradient()
-                print(f"Reference geometry energy: {grad_obj.get_reference_energy()}")
         except RuntimeError as e:
             if xtpl_restart:
                 print(str(e))
@@ -148,11 +153,13 @@ class Optimization(object):
             low_corr_restart = xtpl_restart and index == 0 and iteration == restart_iteration
 
             if acceptable_index or low_corr_restart:
-                xtpl_restart = True
+                restart = True
             else:
-                xtpl_restart = False
+                restart = False
 
-            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_restart=xtpl_restart,
+            grad_obj.options.name = f"{grad_obj.options.name}--{iteration:>02d}"
+    
+            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_restart=restart,
                                               grad_obj=grad_obj)
 
             gradients.append(grad)

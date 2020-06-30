@@ -77,6 +77,8 @@ class Hessian(object):
             self.options.job_array_range = (1, self.ndisps)
             working_directory = os.getcwd()
             os.chdir(self.path)
+            if self.options.name.upper() == 'STEP':
+                self.options.name = 'Hess'
             submitter.submit(self.options)
             os.chdir(working_directory)
 
@@ -150,6 +152,8 @@ def xtpl_hessian(options, molecule, xtpl_inputs, path=".", sow=True):
             xtpl_sow = False
         else:
             xtpl_sow = True
+
+        hess_obj.options.name = 'hess'
 
         print(f"Trying to compute hessian. sow is {sow}")
         hessian = hess_obj.compute_hessian(xtpl_sow)
