@@ -31,7 +31,7 @@ class Options(object):
         self.email_opts = kwargs.pop("email_opts", 'ae')
         self.memory = kwargs.pop("memory", "")
         self.cluster = kwargs.pop("cluster", "").upper()
-        self.name = kwargs.pop("name", "")
+        self.name = kwargs.pop("name", "STEP")
         self.resub = kwargs.pop("resub",False)
         self.resub_test = kwargs.pop("resub_test",False)
         self.wait_time = kwargs.pop("wait_time", None)

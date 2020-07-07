@@ -1,6 +1,6 @@
 vulcan_template = """#!/bin/sh
 #$ -q {q}
-#$ -N opt
+#$ -N {name}
 #$ -S /bin/sh
 #$ -sync y
 #$ -cwd
