@@ -12,7 +12,6 @@ import psi4
 
 from . import submitter
 from .singlepoint import Calculation, SinglePoint
-from .utils import time_str_2_sec, get_last_energy
 from .submitter import make_sub_script
 
 
@@ -36,7 +35,7 @@ class FiniteDifferenceCalc(Calculation):
         ref_molecule = self.molecule.copy()
         ref_path = os.path.join(self.path, "{:d}".format(1))
         ref_singlepoint = SinglePoint(ref_molecule, self.inp_file_obj, self.options, path=ref_path,
-                                      num=1, key='reference')
+                                      disp_num=1, key='reference')
         ref_singlepoint.options.name = f"{self.options.name}-1"
         self.singlepoints.append(ref_singlepoint)
 
@@ -48,7 +47,7 @@ class FiniteDifferenceCalc(Calculation):
                                        geom_units="bohr")
             disp_path = os.path.join(self.path, "{:d}".format(disp_num + 2)) 
             disp_singlepoint = SinglePoint(disp_molecule, self.inp_file_obj, self.options,
-                                           path=disp_path, num=disp_num + 2, key=disp)
+                                           path=disp_path, disp_num=disp_num + 2, key=disp)
             disp_singlepoint.options.name = f"{self.options.name}-{disp_num+2}"
             self.singlepoints.append(disp_singlepoint)
 
@@ -133,7 +132,6 @@ class FiniteDifferenceCalc(Calculation):
     def resub(self, force_resub=False):
         """ Rerun each singlepoint in self.failed (that has finished) as an individual job. """
 
-
         if self.options.cluster.upper() != "SAPELO" or force_resub:
             for singlepoint in self.failed:
                 singlepoint.run()  # job_array is now always False for a singlepoint.
@@ -141,13 +139,13 @@ class FiniteDifferenceCalc(Calculation):
             time.sleep(5)  # ensure that the queue has time to see all jobs
             for job in self.job_ids:
                 try:
-                    job_status, job_num = FiniteDifferenceCalc.pbs_qstat_info(job)
+                    finished, job_num = FiniteDifferenceCalc.pbs_qstat_info(job)
                 except RuntimeError:
                     time.sleep(10)
-                    job_status, job_num = FiniteDifferenceCalc.pbs_qstat_info(job)
+                    finished, job_num = FiniteDifferenceCalc.pbs_qstat_info(job)
                     # let RuntimeError go if we still can't find job_state
 
-                if not job_status:
+                if not finished:
                     continue
 
                 current_sp = self.singlepoints[job_num - 1]
@@ -155,18 +153,15 @@ class FiniteDifferenceCalc(Calculation):
                 # for success
                 # some jobs being rerun after success_string is printed add an additional check_status check
                 if current_sp in self.failed:
-
                     # Troubleshooting. Seeing some jobs resubmitted which don't need to be. 
                     # Ensure that self.failed is up to date (should have been updated
-                    # immediately before this was called. 
-                    # Make sure that self.failed() only contains jobs which have failed rerun.
+                    # immediately before this was called) 
+                    # On Sapelo stdout should contain just the job id
 
                     self.collect_failures()
                     if current_sp in self.failed:
-
-                        current_sp.check_status()
+                        
                         new_job_id = current_sp.run()
-                    
                         # replace job_id with new_job_id to ensure no duplicates
                         self.job_ids[self.job_ids.index(job)] = new_job_id
 
@@ -181,9 +176,6 @@ class FiniteDifferenceCalc(Calculation):
 
         self.failed = []  # empty self.failed
 
-        if self.failed:
-            raise RuntimeError("self.failed was not cleared appropriately")
-
         for index, singlepoint in enumerate(self.singlepoints):
             # This if statement is only here for testing purposes
             if self.options.resub_test:
@@ -192,7 +184,9 @@ class FiniteDifferenceCalc(Calculation):
                     self.failed.append(singlepoint)
             # This if statement will be used for most optimizations
             try:
-                if not singlepoint.check_status(singlepoint.options.success_regex, return_text=False):
+                success = singlepoint.check_status(singlepoint.options.success_regex, 
+                                                   return_text=False)
+                if not success:
                     self.failed.append(singlepoint)
                 elif singlepoint in self.failed:
                     #  Troubleshooting ensure that a successful job cannot persist in self.failed
@@ -229,20 +223,24 @@ class FiniteDifferenceCalc(Calculation):
 
         job_state = False
         pipe = subprocess.PIPE
-        process = subprocess.run(['qstat', '-f', f'{job_id}'], stdout=pipe, stderr=pipe)
+        process = subprocess.run(['qstat', '-f', f'{job_id}'], stdout=pipe, stderr=pipe, encoding='UTF-8')
         output = str(process.stdout)
-        # exit_status = re.search(r"\s+exit_status\s=\s(d+)", process.output)
 
         try:
+            print("\nLooking for job_state")
             completion = re.search(r"\s*job_state\s=\s([A-Z])", output).group(1)
+            print(completion)
         except AttributeError as e:
             print(f"Could not find job_state in output of qstat -f {job_id}")
+            print
             raise RuntimeError from e
 
         name_itr_num = r"\s*Job_Name\s=\s*[a-zA-Z]*[\_\-\s]?[a-zA-Z]*\d?(\-+\d*)?\-(\d*)"
 
         try:
+            print("Fetching job number")
             job_num = int(re.search(name_itr_num, output).group(2))
+            print(job_num)
         except AttributeError as e:
             print("\nCould not find displacement number in Job_Name using standard optavc naming convention\n")
             print(output)
@@ -303,8 +301,8 @@ class Gradient(FiniteDifferenceCalc):
 
 class Hessian(FiniteDifferenceCalc):
 
-    def __init__(self, options, input_obj, molecule, path):
-        super().__init__(options, input_obj, molecule, path)
+    def __init__(self, molecule, input_obj, options, path):
+        super().__init__(molecule, input_obj, options, path)
     
         self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         self.findifrec = psi4.driver_findif.hessian_from_energy_geometries(self.psi4_mol_obj, -1)
@@ -332,3 +330,59 @@ class Hessian(FiniteDifferenceCalc):
         psi4.driver._hessian_write(wfn)
 
         return self.result
+
+    @staticmethod
+    def xtpl_hessian(molecule, xtpl_inputs, options, path=".", sow=True):
+        """ Call compute_hessian repeatedly
+        Need to do: (CCSD w/ (T) correction)
+                    MP2/QZ, SCF/QZ and MP2/TZ
+        """
+
+        from .xtpl import xtpl_wrapper, energy_correction, order_high_low  # circular import fix
+
+        hessians = []
+        ref_energies = []
+
+        for index, hess_obj in enumerate(xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options)):
+            if hess_obj.options.xtpl_input_style == [2, 2]:
+                separate_mp2 = 2
+            else:
+                separate_mp2 = 1
+
+            if index not in [0, separate_mp2] or sow is False:
+                xtpl_sow = False
+            else:
+                xtpl_sow = True
+
+            hess_obj.options.name = 'hess'
+
+            print(f"Trying to compute hessian. sow is {sow}")
+            hessian = hess_obj.compute_hessian(xtpl_sow)
+            hessians.append(hessian)
+            ref_energies.append(hess_obj.get_reference_energy())
+
+        basis_sets = options.xtpl_basis_sets
+        # Same order as in xtpl_grad()
+        
+        #xtpl.order_high_low
+        ordered_en, ordered_hess = order_high_low(hessians, ref_energies, options.xtpl_input_style)
+        
+        final_en, final_hess, _ = energy_correction(basis_sets, ordered_hess, ordered_en)
+
+        print("\n\n=============================XTPL-HESS=============================")
+        print(f"Energies:\n {ordered_en}")
+        print(f"final_energy: {final_en}")
+        print(f"final_hess:\n {final_hess.np}")
+        print("===================================================================\n\n")
+
+        print("Any imaginary freqeuency mode warnings from psi4 should now be heeded")
+        print("All other warnings may be safely ignored")
+        psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
+        wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
+        wfn.set_hessian(final_hess)
+        wfn.set_energy(final_en)
+        psi4.core.set_variable("CURRENT ENERGY", final_en)
+        psi4.driver.vibanal_wfn(wfn)
+        psi4.driver._hessian_write(wfn)
+
+        return final_hess

@@ -1,25 +1,25 @@
 import psi4
 import numpy as np
 from .molecule import Molecule
-from .gradient import Gradient
+from .singlepoint import Calculation
+from .findifcalcs import Gradient
 from .xtpl import xtpl_wrapper, energy_correction, order_high_low
 
+class Optimization(Calculation):
 
-class Optimization(object):
-    def __init__(self, options, input_obj, molecule, xtpl_inputs=None):
-
-        self.reference_molecule = molecule
-        self.inp_file_obj = input_obj
-        self.options = options
+    def __init__(self, molecule, input_obj, options, xtpl_inputs=None):
+        super().__init__(molecule, input_obj, options)
         self.step_molecules = []
         self.xtpl_inputs = xtpl_inputs
 
     def run(self, restart_iteration=0, xtpl_restart=None):
+        
         for iteration in range(self.options.maxiter):
-            self.step_molecules.append(self.reference_molecule)
+            self.step_molecules.append(self.molecule)
             # compute the gradient for the current molecule --
             # the path for gradient computation is set to "STEP0x"
-            print(f"Beginning step {iteration}") 
+            
+            print(f"\n====================Beginning new step {iteration}======================\n") 
             if self.options.xtpl:
                 # Calls single_grad repeatedly
                 ref_energy, grad = self.xtpl_grad(iteration, restart_iteration, xtpl_restart)
@@ -31,26 +31,30 @@ class Optimization(object):
             try:
                 psi4.core.set_gradient(grad)
                 psi4.core.set_variable('CURRENT ENERGY', ref_energy)
-                psi4_mol_obj = self.reference_molecule.cast_to_psi4_molecule_object()
+                psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+
                 if self.options.point_group is not None:  # otherwise autodetect
                     psi4_mol_obj.reset_point_group(self.options.point_group)
                 psi4.core.set_legacy_molecule(psi4_mol_obj)
                 optking_exit_code = psi4.core.optking()
+
                 # optking has put the next step geometry in psi::Environment,
                 # so we can grab a copy and cast it
                 # from psi4.Molecule() to Molecule()
-                self.reference_molecule = Molecule(psi4.core.get_legacy_molecule())
+                self.molecule = Molecule(psi4.core.get_legacy_molecule())
                 if optking_exit_code == psi4.core.PsiReturnType.EndLoop:
                     psi4.core.print_out("Optimizer: Optimization complete!")
                     break
                 elif optking_exit_code == psi4.core.PsiReturnType.Failure:
                     raise Exception("Optimizer: Optimization failed!")
+
                 # We finished a step. Certainly, hessian reading should be disabled now!
                 psi4.core.set_local_option('OPTKING', 'CART_HESS_READ', False)
                 psi4.core.set_legacy_molecule(None)
             except Exception as e:
                 print("An errror was encountered while using psi4 to take a step")
                 print(str(e))
+
         if self.options.mpi:
             from .mpi4py_iface import slay
             slay()  # kill all workers before exiting
@@ -89,7 +93,7 @@ class Optimization(object):
             
             options.name = f"{options.name}--{iteration:02d}"
 
-            grad_obj = Gradient(self.reference_molecule, inp_file_obj, options, step_path)
+            grad_obj = Gradient(self.molecule, inp_file_obj, options, step_path)
 
         # reassemble gradients as possible
         # Always restart based on iteration number
@@ -97,11 +101,11 @@ class Optimization(object):
 
         try:
             if iteration < restart_iteration:
-                grad = grad_obj.reap()  # could be 1 or more  gradients
+                grad = grad_obj.reap(force_resub=True)  # could be 1 or more  gradients
             elif xtpl_restart:
-                grad = grad_obj.reap()
+                grad = grad_obj.reap(force_resub=True)
             else:
-                grad = grad_obj.compute_gradient()
+                grad = grad_obj.compute_result()
         except RuntimeError as e:
             if xtpl_restart:
                 print(str(e))
@@ -128,7 +132,7 @@ class Optimization(object):
         gradients = []
         ref_energies = []
 
-        for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.reference_molecule,
+        for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.molecule,
                                                       self.xtpl_inputs, self.options, iteration)):
 
             # [2, 2] -> grab the low correlation, small basis calculations in single input file
