@@ -10,6 +10,7 @@ class Optimization(Calculation):
     def __init__(self, molecule, input_obj, options, xtpl_inputs=None):
         super().__init__(molecule, input_obj, options)
         self.step_molecules = []
+        self.name = options.name
         self.xtpl_inputs = xtpl_inputs
 
     def run(self, restart_iteration=0, xtpl_restart=None):
@@ -91,7 +92,7 @@ class Optimization(Calculation):
             if step_path is None:
                 step_path = f"STEP{iteration:>02d}"
             
-            options.name = f"{options.name}--{iteration:02d}"
+            options.name = f"{self.name}--{iteration:02d}"
 
             grad_obj = Gradient(self.molecule, inp_file_obj, options, step_path)
 
