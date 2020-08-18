@@ -103,7 +103,7 @@ class SinglePoint(Calculation):
         
         Raises
         ------
-        RuntimeError : No sucess string was found
+        RuntimeError : No sucess string was found - job hasn't finished, stalled, or failed
         ValueError : get_last_energy() could not find the energy statement but a
             success statement was found. Check regex with tool such as - regexr.com.
 
@@ -112,14 +112,14 @@ class SinglePoint(Calculation):
         status, output = self.check_status(self.options.success_regex, return_text=True)
         
         if status:
-            energy = SinglePoint.get_last_energy(self.options.energy_regex, output)
-            correction = sum(SinglePoint.get_last_energy(correction_regex, output)
+            energy = self.get_last_energy(self.options.energy_regex, output)
+            correction = sum(self.get_last_energy(correction_regex, output)
                              for correction_regex in self.options.correction_regexes)
             # If no correction, adding zero. Add to correlation energy if 2 energies
             return energy + correction
         else:
-            print("Could not find success string in output.dat")
-            raise RuntimeError("SinglePoint job at {:s} failed.".format(output_path))
+            raise RuntimeError(f""" Could not find success string in output.dat 
+                                SinglePoint job {self.disp_num} failed""")
 
     def check_status(self, status_str, return_text=False):
         """ Check for status_str. This is how optavc finds failed jobs. This information
@@ -147,8 +147,7 @@ class SinglePoint(Calculation):
             output_path = os.path.join(self.path, self.options.output_name)
             output_text = open(output_path).read()
         except FileNotFoundError as e:
-            print(str(e))
-            print(f"\nCould not open output file for singlepoint: {self.disp_num}")
+            print(f"Could not open output file for singlepoint: {self.disp_num}")
             raise
         else:
             check = re.search(status_str, output_text)
@@ -185,13 +184,11 @@ class SinglePoint(Calculation):
         with open(output_path,'w') as file:
             file.writelines(output_text)
 
-    @staticmethod
-    def get_last_energy(regex_str, output_text):
+    def get_last_energy(self, regex_str, output_text):
         try:
             return float(re.findall(regex_str, output_text)[-1])
         except (ValueError, IndexError) as e:
             if regex_str == '':
                 return 0.0  # Yes, yes, I'm silencing an exception no one cares
             else:
-                print(str(e))
-                raise ValueError(f"Could not find energy in {output_path} using {regex_str}")
+                raise ValueError(f"Could not find energy for singlepoint {self.disp_num} using {regex_str}")

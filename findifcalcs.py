@@ -235,7 +235,7 @@ class FiniteDifferenceCalc(Calculation):
             print
             raise RuntimeError from e
 
-        name_itr_num = r"\s*Job_Name\s=\s*[a-zA-Z]*[\_\-\s]?[a-zA-Z]*\d?(\-+\d*)?\-(\d*)"
+        name_itr_num = r"\s*Job_Name\s=\s*.*(\-+\d*)?\-(\d*)"
 
         try:
             print("Fetching job number")
@@ -248,7 +248,7 @@ class FiniteDifferenceCalc(Calculation):
 
         if not completion:
             raise RuntimeError(f"Could not determine state of job {job_id}")
-        elif completion == 'C':  # jobs has finished
+        elif completion == 'C':  # jobs hav finished
             job_state = True
 
         if return_stdout:
