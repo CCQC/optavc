@@ -106,13 +106,12 @@ class FiniteDifferenceCalc(Calculation):
         """
 
         while self.collect_failures():
-            print(f"1 or more singlepoints have failed, or are still running")
             if self.options.resub:
                 self.resub(force_resub)
                 force_resub = False  # only try (at most) 1 forced resubmit
                 time.sleep(60)  # go to sleep for 1 minute
             else:
-                print(f"""\nThe following jobs failed: \n
+                print(f"""Resub has not been turned on. The following jobs failed: \n
                         {[singlepoint.disp_num for singlepoint in self.failed]}""")
                 break
 
@@ -156,7 +155,6 @@ class FiniteDifferenceCalc(Calculation):
                     # Troubleshooting. Seeing some jobs resubmitted which don't need to be. 
                     # Ensure that self.failed is up to date (should have been updated
                     # immediately before this was called) 
-                    # On Sapelo stdout should contain just the job id
 
                     self.collect_failures()
                     if current_sp in self.failed:
@@ -227,29 +225,25 @@ class FiniteDifferenceCalc(Calculation):
         output = str(process.stdout)
 
         try:
-            print("\nLooking for job_state")
             completion = re.search(r"\s*job_state\s=\s([A-Z])", output).group(1)
-            print(completion)
         except AttributeError as e:
             print(f"Could not find job_state in output of qstat -f {job_id}")
-            print
             raise RuntimeError from e
+        else:
+            if not completion:
+                raise RuntimeError(f"Could not determine state of job {job_id}")
+            elif completion == 'C':  # jobs hav finished
+                job_state = True
 
         name_itr_num = r"\s*Job_Name\s=\s*.*(\-+\d*)?\-(\d*)"
 
         try:
-            print("Fetching job number")
             job_num = int(re.search(name_itr_num, output).group(2))
             print(job_num)
         except AttributeError as e:
             print("\nCould not find displacement number in Job_Name using standard optavc naming convention\n")
             print(output)
             raise RuntimeError from e
-
-        if not completion:
-            raise RuntimeError(f"Could not determine state of job {job_id}")
-        elif completion == 'C':  # jobs hav finished
-            job_state = True
 
         if return_stdout:
             return job_state, job_num, str(process.stdout)
@@ -302,7 +296,7 @@ class Gradient(FiniteDifferenceCalc):
 class Hessian(FiniteDifferenceCalc):
 
     def __init__(self, molecule, input_obj, options, path):
-        super().__init__(molecule, input_obj, options, path)
+        super().__init__(molecule, input_obj, options, path="./HESS")
     
         self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         self.findifrec = psi4.driver_findif.hessian_from_energy_geometries(self.psi4_mol_obj, -1)
@@ -332,7 +326,7 @@ class Hessian(FiniteDifferenceCalc):
         return self.result
 
     @staticmethod
-    def xtpl_hessian(molecule, xtpl_inputs, options, path=".", sow=True):
+    def xtpl_hessian(molecule, xtpl_inputs, options, path="./HESS", sow=True):
         """ Call compute_hessian repeatedly
         Need to do: (CCSD w/ (T) correction)
                     MP2/QZ, SCF/QZ and MP2/TZ
@@ -344,20 +338,21 @@ class Hessian(FiniteDifferenceCalc):
         ref_energies = []
 
         for index, hess_obj in enumerate(xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options)):
+            
+            # separate_mp2 denotes when a "new" calculation needs to be performed
             if hess_obj.options.xtpl_input_style == [2, 2]:
-                separate_mp2 = 2
+                separate_idx = 2
             else:
-                separate_mp2 = 1
-
-            if index not in [0, separate_mp2] or sow is False:
-                xtpl_sow = False
-            else:
-                xtpl_sow = True
-
-            hess_obj.options.name = 'hess'
+                separate_idx = 1
 
             print(f"Trying to compute hessian. sow is {sow}")
-            hessian = hess_obj.compute_hessian(xtpl_sow)
+            hess_obj.options.name = 'hess'
+
+            if index not in [0, separate_idx] or sow is False:
+                hessian = hess_obj.reap()
+            else:
+                hessian = hess_obj.compute_result()
+
             hessians.append(hessian)
             ref_energies.append(hess_obj.get_reference_energy())
 
