@@ -307,7 +307,7 @@ class Hessian(FiniteDifferenceCalc):
             self.options.name = 'Hess'
         super().run() 
 
-    def reap(self, force_resub=False):
+    def reap(self, force_resub=True):
 
         super().reap(force_resub)
 

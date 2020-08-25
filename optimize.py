@@ -230,5 +230,5 @@ class Optimization(Calculation):
                     shutil.copytree(f'{self.path}/STEP{step_idx:>02d}', 
                                     f'{self.path}/1_opt/STEP{step_idx:>02d}')
                     if step_idx >= restart_iteration:
-                        shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')     
-                
+                        shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')
+
