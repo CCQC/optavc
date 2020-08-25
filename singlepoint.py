@@ -12,7 +12,8 @@ Singlepoint
 -----------
 
 Since otpavc only performs finite differences by singlepoint, much of the machinery
-lies here. Gradient, and Hessian are mostly going to loop of SinglePoint
+lies here. Gradient, and Hessian loop through a list of SinglePoints for most of their
+tasks
 
 Controls writing template files, running individual singlepoints,  
 """
@@ -64,7 +65,7 @@ class SinglePoint(Calculation):
         super().__init__(molecule, inp_file_obj, options, path)
         self.key = key
         self.disp_num = disp_num
-        self.options.job_array_range = (1, 1)
+        self.options.job_array_range = (1, 1)  # job array range always chcked in submtter
     
     def write_input(self):
         """ Uses template.InputFile.make_input() to replace the geometry in
@@ -112,18 +113,23 @@ class SinglePoint(Calculation):
         status, output = self.check_status(self.options.success_regex, return_text=True)
         
         if status:
-            energy = self.get_last_energy(self.options.energy_regex, output)
-            correction = sum(self.get_last_energy(correction_regex, output)
-                             for correction_regex in self.options.correction_regexes)
-            # If no correction, adding zero. Add to correlation energy if 2 energies
-            return energy + correction
+            try:
+                return self._assemble_energy(output)
+            except ValueError:
+                time.sleep(1)
+                # This line was added to fix a bug where energies could not be found with a valid 
+                # energy_regex. Could not be replicated in smaller test systems 
+ 
+                # go to sleep for 1 second try to find the energy again. Let ValueError go
+                return self._assemble_energy(output)
         else:
             raise RuntimeError(f""" Could not find success string in output.dat 
                                 SinglePoint job {self.disp_num} failed""")
-
+    
     def check_status(self, status_str, return_text=False):
-        """ Check for status_str. This is how optavc finds failed jobs. This information
-        is necessary but not sufficient to resubmit a job on sapelo.
+        """ Check for status_str within a output_file. This is how optavc finds failed jobs. 
+        This information is necessary but not sufficient to resubmit a job on sapelo (job_state
+        must also be confirmed via queuing system)
 
         Parameters
         ----------
@@ -141,6 +147,10 @@ class SinglePoint(Calculation):
         ------
         FileNotFoundError
 
+        Notes
+        -----
+        method should called through get_energy_from_output in standard workflow
+
         """
         
         try:
@@ -154,7 +164,35 @@ class SinglePoint(Calculation):
             if return_text:
                 return check, output_text
             return check
-    
+
+    def _assemble_energy(self, output):
+        """ wrapper for collecting the energy with any needed corrections. 
+        Raises
+        ------
+        ValueError: if not able to find the Energy
+
+        Notes
+        -----
+        ValueError since success string should be found before this method is every called
+        check regex for energy
+        """
+        energy = self._get_energy_float(self.options.energy_regex, output)
+        correction = sum(self._get_energy_float(correction_regex, output)
+                         for correction_regex in self.options.correction_regexes)
+        # If no correction, adding zero. Add to correlation energy if 2 energies
+        return energy + correction
+        
+
+    def _get_energy_float(self, regex_str, output_text):
+        try:
+            return float(re.findall(regex_str, output_text)[-1])
+        except (ValueError, IndexError) as e:
+            if regex_str == '':
+                return 0.0  # Yes, yes, I'm silencing an exception no one cares
+                            # regex_str can be '' in the case of no correction being included
+            else:
+                raise ValueError(f"Could not find energy for singlepoint {self.disp_num} using {regex_str}")
+
     # These two functions are purely here for the testing of the resub functionality
     def check_resub(self):
         """ Check/test the resubmission feature. Searches for the 'Giraffe' inserted by 'insert_Giraffe' function.
@@ -184,11 +222,3 @@ class SinglePoint(Calculation):
         with open(output_path,'w') as file:
             file.writelines(output_text)
 
-    def get_last_energy(self, regex_str, output_text):
-        try:
-            return float(re.findall(regex_str, output_text)[-1])
-        except (ValueError, IndexError) as e:
-            if regex_str == '':
-                return 0.0  # Yes, yes, I'm silencing an exception no one cares
-            else:
-                raise ValueError(f"Could not find energy for singlepoint {self.disp_num} using {regex_str}")

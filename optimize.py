@@ -1,5 +1,8 @@
+import shutil, os
+
 import psi4
 import numpy as np
+
 from .molecule import Molecule
 from .singlepoint import Calculation
 from .findifcalcs import Gradient
@@ -15,21 +18,26 @@ class Optimization(Calculation):
 
     def run(self, restart_iteration=0, xtpl_restart=None):
         
+        # copy step if restart would have overwritten some steps
+        self.copy_old_steps(restart_iteration, xtpl_restart)        
+        
         for iteration in range(self.options.maxiter):
             self.step_molecules.append(self.molecule)
             # compute the gradient for the current molecule --
             # the path for gradient computation is set to "STEP0x"
             
             print(f"\n====================Beginning new step {iteration}======================\n") 
+            
             if self.options.xtpl:
                 # Calls single_grad repeatedly
                 ref_energy, grad = self.xtpl_grad(iteration, restart_iteration, xtpl_restart)
             else:
                 grad, grad_obj = self.single_grad(iteration, restart_iteration)
                 ref_energy = grad_obj.get_reference_energy()
-            # put the gradient, energy, and molecule for the current step in psi::Environment
-            # before calling psi4.optking()
+            
             try:
+                # put the gradient, energy, and molecule for the current step in psi::Environment
+                # before calling psi4.optking()
                 psi4.core.set_gradient(grad)
                 psi4.core.set_variable('CURRENT ENERGY', ref_energy)
                 psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
@@ -55,6 +63,7 @@ class Optimization(Calculation):
             except Exception as e:
                 print("An errror was encountered while using psi4 to take a step")
                 print(str(e))
+                raise
 
         if self.options.mpi:
             from .mpi4py_iface import slay
@@ -83,7 +92,7 @@ class Optimization(Calculation):
             grad_obj: gradient.Gradient
         """
 
-        # Fill in options parameters with class attributes if not provided
+        # Create a gradient object with Optimization's attributes if not provided
         if grad_obj is None:
             if inp_file_obj is None:
                 inp_file_obj = self.inp_file_obj
@@ -120,7 +129,7 @@ class Optimization(Calculation):
             print(f"Missing {self.options.output_name}")
             raise
         except ValueError as e:
-            print(e)
+            print(str(e))
             raise
 
         return grad, grad_obj
@@ -139,14 +148,14 @@ class Optimization(Calculation):
             # [2, 2] -> grab the low correlation, small basis calculations in single input file
             # [1, 3] -> do all low correlation calculations in single output file
             if self.options.xtpl_input_style == [2, 2]:
-                separate_mp2 = 2
+                separate_idx = 2
             else:
-                separate_mp2 = 1
+                separate_idx = 1
 
             # want to set sow = False if iteration < restart_iteration
             # if index not in [0, 2]
             # if xtpl_restart and index == 0
-            acceptable_index = index not in [0, separate_mp2]
+            acceptable_index = index not in [0, separate_idx]
             low_corr_restart = xtpl_restart and index == 0 and iteration == restart_iteration
 
             if acceptable_index or low_corr_restart:
@@ -172,14 +181,54 @@ class Optimization(Calculation):
         final_en, final_grad, low_CBS_e = energy_correction(basis_sets, ordered_grads, ordered_en)
 
         print(
-            f"\n\n=====================================xtpl=====================================\n")
+            f"\n\n=====================================XTPL=====================================\n")
         print(f"xtpl gradient:\n {str(final_grad.np)}")
         print(f"mp2/tqz{low_CBS_e}\t\t\t using helgaker 2 pt xtpl\n\n")
         print(f"CCSD - mp2 {ref_energies[0] - ref_energies[1]}")
         print(f"xtpl energy: {final_en}")
         print(f"energies {ordered_en}")
-        print(f"gradients {[i.np for i in ordered_grads]}")
+        print(f"gradients:\n {chr(10).join([str(i.np) for i in ordered_grads])}")  # chr(10) is ascii \n
         print(
-            f"\n=====================================xtpl=====================================\n\n")
+            f"\n=====================================XTPL=====================================\n\n")
 
         return final_en, final_grad
+
+    def copy_old_steps(self, restart_iteration, xtpl_restart):
+        """ If a directory is going to be overwritten by a restart copy the directories to backup 
+        and prevent steps > restart_iteration are not immediately submitted.  
+
+        """
+        
+        dir_test = f'{self.path}/STEP{restart_iteration:0>2d}'
+        
+        # if only the high_corr exists when restarting and xtpl_restart was not specified, 
+        # the high_corr jobs will be rurun and a copy of all steps will be made.
+
+        if (os.path.exists(dir_test) or
+            (xtpl_restart and os.path.exists(f'{dir_test}/{low_corr}'))):
+            
+                itr = 0
+                # determine the number of directories of the form STEPXX exist
+                while os.path.exists(f'{self.path}/STEP{itr:>02d}'):
+                    itr += 1
+                
+                restart_itr = 0
+                while os.path.exists(f'{self.path}/{itr}_opt'):
+                    restart_itr += 1
+
+                # Move highest indexed group up. Delete. move previous up to replace delete.
+                # Delete STEP0X for X >= restart index
+
+                if restart_itr:
+                    for index in range(restart_itr, 0, -1):  # stop before 0
+                        shutil.copytree(f'{index}_opt',
+                                        f'{index + 1}_opt')
+                        # copy tree must be able to perform a mkdir for python <= 3.8
+                        shutil.rmtree(f'{index}_opt')
+                    
+                for step_idx in range(itr):
+                    shutil.copytree(f'{self.path}/STEP{step_idx:>02d}', 
+                                    f'{self.path}/1_opt/STEP{step_idx:>02d}')
+                    if step_idx >= restart_iteration:
+                        shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')     
+                
