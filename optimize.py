@@ -1,56 +1,70 @@
+import shutil, os
+
 import psi4
 import numpy as np
+
 from .molecule import Molecule
-from .gradient import Gradient
+from .singlepoint import Calculation
+from .findifcalcs import Gradient
 from .xtpl import xtpl_wrapper, energy_correction, order_high_low
 
+class Optimization(Calculation):
 
-class Optimization(object):
-    def __init__(self, options, input_obj, molecule, xtpl_inputs=None):
-
-        self.reference_molecule = molecule
-        self.inp_file_obj = input_obj
-        self.options = options
+    def __init__(self, molecule, input_obj, options, xtpl_inputs=None):
+        super().__init__(molecule, input_obj, options)
         self.step_molecules = []
+        self.name = options.name
         self.xtpl_inputs = xtpl_inputs
 
     def run(self, restart_iteration=0, xtpl_restart=None):
+        
+        # copy step if restart would have overwritten some steps
+        self.copy_old_steps(restart_iteration, xtpl_restart)        
+        
         for iteration in range(self.options.maxiter):
-            self.step_molecules.append(self.reference_molecule)
+            self.step_molecules.append(self.molecule)
             # compute the gradient for the current molecule --
             # the path for gradient computation is set to "STEP0x"
-            print(f"Beginning step {iteration}") 
+            
+            print(f"\n====================Beginning new step {iteration}======================\n") 
+            
             if self.options.xtpl:
                 # Calls single_grad repeatedly
                 ref_energy, grad = self.xtpl_grad(iteration, restart_iteration, xtpl_restart)
             else:
                 grad, grad_obj = self.single_grad(iteration, restart_iteration)
                 ref_energy = grad_obj.get_reference_energy()
-            # put the gradient, energy, and molecule for the current step in psi::Environment
-            # before calling psi4.optking()
+            
             try:
+                # put the gradient, energy, and molecule for the current step in psi::Environment
+                # before calling psi4.optking()
                 psi4.core.set_gradient(grad)
                 psi4.core.set_variable('CURRENT ENERGY', ref_energy)
-                psi4_mol_obj = self.reference_molecule.cast_to_psi4_molecule_object()
+                psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+
                 if self.options.point_group is not None:  # otherwise autodetect
                     psi4_mol_obj.reset_point_group(self.options.point_group)
                 psi4.core.set_legacy_molecule(psi4_mol_obj)
                 optking_exit_code = psi4.core.optking()
+
                 # optking has put the next step geometry in psi::Environment,
                 # so we can grab a copy and cast it
                 # from psi4.Molecule() to Molecule()
-                self.reference_molecule = Molecule(psi4.core.get_legacy_molecule())
+                self.molecule = Molecule(psi4.core.get_legacy_molecule())
                 if optking_exit_code == psi4.core.PsiReturnType.EndLoop:
                     psi4.core.print_out("Optimizer: Optimization complete!")
                     break
                 elif optking_exit_code == psi4.core.PsiReturnType.Failure:
                     raise Exception("Optimizer: Optimization failed!")
+
                 # We finished a step. Certainly, hessian reading should be disabled now!
                 psi4.core.set_local_option('OPTKING', 'CART_HESS_READ', False)
                 psi4.core.set_legacy_molecule(None)
             except Exception as e:
                 print("An errror was encountered while using psi4 to take a step")
                 print(str(e))
+                raise
+
         if self.options.mpi:
             from .mpi4py_iface import slay
             slay()  # kill all workers before exiting
@@ -78,7 +92,7 @@ class Optimization(object):
             grad_obj: gradient.Gradient
         """
 
-        # Fill in options parameters with class attributes if not provided
+        # Create a gradient object with Optimization's attributes if not provided
         if grad_obj is None:
             if inp_file_obj is None:
                 inp_file_obj = self.inp_file_obj
@@ -87,9 +101,9 @@ class Optimization(object):
             if step_path is None:
                 step_path = f"STEP{iteration:>02d}"
             
-            options.name = f"{options.name}--{iteration:02d}"
+            options.name = f"{self.name}--{iteration:02d}"
 
-            grad_obj = Gradient(self.reference_molecule, inp_file_obj, options, step_path)
+            grad_obj = Gradient(self.molecule, inp_file_obj, options, step_path)
 
         # reassemble gradients as possible
         # Always restart based on iteration number
@@ -97,11 +111,11 @@ class Optimization(object):
 
         try:
             if iteration < restart_iteration:
-                grad = grad_obj.reap()  # could be 1 or more  gradients
+                grad = grad_obj.reap(force_resub=True)  # could be 1 or more  gradients
             elif xtpl_restart:
-                grad = grad_obj.reap()
+                grad = grad_obj.reap(force_resub=True)
             else:
-                grad = grad_obj.compute_gradient()
+                grad = grad_obj.compute_result()
         except RuntimeError as e:
             if xtpl_restart:
                 print(str(e))
@@ -115,7 +129,7 @@ class Optimization(object):
             print(f"Missing {self.options.output_name}")
             raise
         except ValueError as e:
-            print(e)
+            print(str(e))
             raise
 
         return grad, grad_obj
@@ -128,20 +142,20 @@ class Optimization(object):
         gradients = []
         ref_energies = []
 
-        for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.reference_molecule,
+        for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.molecule,
                                                       self.xtpl_inputs, self.options, iteration)):
 
             # [2, 2] -> grab the low correlation, small basis calculations in single input file
             # [1, 3] -> do all low correlation calculations in single output file
             if self.options.xtpl_input_style == [2, 2]:
-                separate_mp2 = 2
+                separate_idx = 2
             else:
-                separate_mp2 = 1
+                separate_idx = 1
 
             # want to set sow = False if iteration < restart_iteration
             # if index not in [0, 2]
             # if xtpl_restart and index == 0
-            acceptable_index = index not in [0, separate_mp2]
+            acceptable_index = index not in [0, separate_idx]
             low_corr_restart = xtpl_restart and index == 0 and iteration == restart_iteration
 
             if acceptable_index or low_corr_restart:
@@ -167,14 +181,58 @@ class Optimization(object):
         final_en, final_grad, low_CBS_e = energy_correction(basis_sets, ordered_grads, ordered_en)
 
         print(
-            f"\n\n=====================================xtpl=====================================\n")
+            f"\n\n=====================================XTPL=====================================\n")
         print(f"xtpl gradient:\n {str(final_grad.np)}")
         print(f"mp2/tqz{low_CBS_e}\t\t\t using helgaker 2 pt xtpl\n\n")
         print(f"CCSD - mp2 {ref_energies[0] - ref_energies[1]}")
         print(f"xtpl energy: {final_en}")
         print(f"energies {ordered_en}")
-        print(f"gradients {[i.np for i in ordered_grads]}")
+        print(f"gradients:\n {chr(10).join([str(i.np) for i in ordered_grads])}")  # chr(10) is ascii \n
         print(
-            f"\n=====================================xtpl=====================================\n\n")
+            f"\n=====================================XTPL=====================================\n\n")
 
         return final_en, final_grad
+
+    def copy_old_steps(self, restart_iteration, xtpl_restart):
+        """ If a directory is going to be overwritten by a restart copy the directories to backup 
+        and prevent steps > restart_iteration are not immediately submitted.  
+
+        """
+        
+        dir_test = f'{self.path}/STEP{restart_iteration:0>2d}'
+        
+        # if only the high_corr exists when restarting and xtpl_restart was not specified, 
+        # the high_corr jobs will be rurun and a copy of all steps will be made.
+
+        if (os.path.exists(dir_test) or
+            (xtpl_restart and os.path.exists(f'{dir_test}/{low_corr}'))):
+            
+                itr = 0
+                # determine the number of directories of the form STEPXX exist
+                while os.path.exists(f'{self.path}/STEP{itr:>02d}'):
+                    itr += 1
+                
+                restart_itr = 1
+                while os.path.exists(f'{self.path}/{restart_itr}_opt'):
+                    restart_itr += 1
+                restart_itr -= 1  # counts too high
+
+                # Move highest indexed group up. Delete. move previous up to replace delete.
+                # Delete STEP0X for X >= restart index
+
+                if restart_itr:
+                    for index in range(restart_itr, 0, -1):  # stop before 0.
+                        shutil.copytree(f'{index}_opt',
+                                        f'{index + 1}_opt')
+                        # copy tree must be able to perform a mkdir for python <= 3.8
+                        shutil.rmtree(f'{index}_opt')
+                
+                for step_idx in range(itr):
+                    shutil.copytree(f'{self.path}/STEP{step_idx:>02d}', 
+                                    f'{self.path}/1_opt/STEP{step_idx:>02d}')
+                    if step_idx >= restart_iteration:
+                        shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')
+
+                shutil.copyfile(f'{self.path}/output.dat', f'{self.path}/1_opt/output.dat')
+                with open(f'{self.path}/output.dat', 'w+'):
+                    pass  # clear file

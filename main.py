@@ -2,7 +2,7 @@ import shutil, os
 import re
 from optavc.options import Options
 from . import optimize
-from . import hessian
+from . import findifcalcs
 from .template import TemplateFileProcessor
 
 
@@ -60,6 +60,8 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
 
     options_obj = Options(**options_dict)
 
+    # Make all required input_file objects required. xtpl job should only require 2
+
     if options_obj.xtpl:
         tfps = [TemplateFileProcessor(open(i).read(), options_obj) for i in
                 options_obj.xtpl_templates]
@@ -74,14 +76,17 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
     molecule = tfp.molecule
 
     if jobtype.upper() in ['OPT', "OPTIMIZATION"]:
-        opt_obj = optimize.Optimization(options_obj, input_obj, molecule, xtpl_inputs)
+        opt_obj = optimize.Optimization(molecule, input_obj, options_obj, xtpl_inputs)
         opt_obj.run(restart_iteration, xtpl_restart)
     elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
         if options_obj.xtpl:
-            hessian.xtpl_hessian(options_obj, molecule, xtpl_inputs, path, sow)
+            findifcalcs.xtpl_hessian(molecule, options_obj, xtpl_inputs, path, sow)
         else:
-            hess_obj = hessian.Hessian(options_obj, input_obj, molecule, path=path)
-            hess_obj.compute_hessian(sow)
+            hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path=path)
+            if sow:
+                hess_obj.compute_result()
+            else:
+                hess_obj.reap()
     else:
         raise ValueError(
-            "Can only run deriv or optimizations. For gradients see optimize.py to run or add wrapper here")
+            "Can only run deriv or optimizations. For gradients see findifcalcs.py to run or add wrapper here")
