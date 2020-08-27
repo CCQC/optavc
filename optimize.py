@@ -212,23 +212,27 @@ class Optimization(Calculation):
                 while os.path.exists(f'{self.path}/STEP{itr:>02d}'):
                     itr += 1
                 
-                restart_itr = 0
-                while os.path.exists(f'{self.path}/{itr}_opt'):
+                restart_itr = 1
+                while os.path.exists(f'{self.path}/{restart_itr}_opt'):
                     restart_itr += 1
+                restart_itr -= 1  # counts too high
 
                 # Move highest indexed group up. Delete. move previous up to replace delete.
                 # Delete STEP0X for X >= restart index
 
                 if restart_itr:
-                    for index in range(restart_itr, 0, -1):  # stop before 0
+                    for index in range(restart_itr, 0, -1):  # stop before 0.
                         shutil.copytree(f'{index}_opt',
                                         f'{index + 1}_opt')
                         # copy tree must be able to perform a mkdir for python <= 3.8
                         shutil.rmtree(f'{index}_opt')
-                    
+                
                 for step_idx in range(itr):
                     shutil.copytree(f'{self.path}/STEP{step_idx:>02d}', 
                                     f'{self.path}/1_opt/STEP{step_idx:>02d}')
                     if step_idx >= restart_iteration:
                         shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')
 
+                shutil.copyfile(f'{self.path}/output.dat', f'{self.path}/1_opt/output.dat')
+                with open(f'{self.path}/output.dat', 'w+'):
+                    pass  # clear file
