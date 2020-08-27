@@ -12,14 +12,10 @@ def submit(options):
     """
 
     out = make_sub_script(options)
-    pipe = subprocess.PIPE
 
     with open('optstep.sh', 'w') as f:
         f.write(out)
-    # subprocess.pipe collects all output. encoede to usable string
-    process = subprocess.run('qsub optstep.sh', stdout=pipe, stderr=pipe, shell=True, encoding='UTF-8')
-    print(process.stdout)
-    return process.stdout[:-1]
+    subprocess.call('qsub optstep.sh', stderr=sys.stdout.buffer, shell=True)
 
 
 def make_sub_script(options):
@@ -48,17 +44,16 @@ def make_sub_script(options):
                       'memory': options.memory,
                       'time': options.time_limit
                       })
-        # Sapelo defaults to individual runs
-        out = submit_template_sp.sapelo_template.format(**odict)
+        out = submit_template.sapelo_template.format(**odict)
         return out
     elif options.cluster.upper() != 'VULCAN':
         print("No cluster provided or cluster not yet supported.")
         print("Trying to continue by defaulting to Vulcan")
     
-        odict.update({'tc': str(job_num)})
-        # out = submit_template.vulcan_template.format(**odict)
-        if options.job_array:
-            out = submit_template.vulcan_template.format(**odict)
-        else:
-            out = submit_template_sp.vulcan_template.format(**odict)
-        return out
+    odict.update({'tc': str(job_num)})
+    # out = submit_template.vulcan_template.format(**odict)
+    if options.job_array:
+        out = submit_template.vulcan_template.format(**odict)
+    else:
+        out = submit_template_sp.vulcan_template.format(**odict)
+    return out

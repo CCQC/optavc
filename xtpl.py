@@ -2,7 +2,9 @@ import copy
 from psi4.core import Matrix
 from psi4.driver.driver_cbs import corl_xtpl_helgaker_2
 
-from .findifcalcs import Gradient, Hessian
+from .gradient import Gradient
+from .hessian import Hessian
+
 
 def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
     """ Create a series of Hessian or Gradient objects for use the extrpolation procedure 
@@ -50,7 +52,6 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
         # Will be used to create gradient object
         # correction defaults to empty string (yields 0) if nothing found
         options = copy.deepcopy(xtpl_options)
-        options.name = f"{xtpl_options.name}--{iteration}"
         options.program = xtpl_options.xtpl_programs[corl_index]
         options.success_regex = xtpl_options.xtpl_success[corl_index]
         inp_file_obj = xtpl_inputs[corl_index]
@@ -59,13 +60,16 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
             options.correction_regexes = [xtpl_options.xtpl_corrections]
         options.energy_regex = energy_regex
         
+        if options.cluster == "SAPELO":
+            options.wait_time = xtpl_options.xtpl_wait_times[corl_index]
+
         if job_type.upper() == 'GRADIENT':
             step_path = f"STEP{iteration:>02d}/{path_additions[corl_index]}"
             grad_obj = Gradient(molecule, inp_file_obj, options, step_path)
             derivative_calcs.append(grad_obj)
         elif job_type.upper() == "HESSIAN":
             path = f"./XTPL/{path_additions[corl_index]}"
-            hess_obj = Hessian(molecule, inp_file_obj, options, path)
+            hess_obj = Hessian(options, inp_file_obj, molecule, path)
             derivative_calcs.append(hess_obj)
 
     return derivative_calcs

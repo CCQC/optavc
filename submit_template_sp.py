@@ -28,23 +28,24 @@ export NSLOTS={nslots}
 {cline}
 """
 
-sapelo_template = """#PBS -S /bin/bash
-#PBS -q {q}
-#PBS -N {name}
-#PBS -l nodes=1:ppn={nslots}:Intel
-#PBS -l mem={memory}
-#PBS -l walltime={time}
-#PBS -M {email}
-#PBS -m {email_opts}
+# sapelo_template = """#PBS -S /bin/bash
+# #PBS -q {q}
+# #PBS -N {name}
+# #PBS -l nodes=1:ppn={nslots}:Intel
+# #PBS -l mem={memory}
+# #PBS -l walltime={time}
+# #PBS -t {jarray}
+# #PBS -M {email}
+# #PBS -m {email_opts}
 
-cd $PBS_O_WORKDIR/
-echo "PBS_JOBID is $PBS_JOBID"
+# cd $PBS_O_WORKDIR/$PBS_ARRAYID
+# echo "PBS_JOBID is $PBS_JOBID"
 
-{mod_load}
-export NSLOTS={nslots}
-time {cline}
+# {mod_load}
+# export NSLOTS={nslots}
+# time {cline}
 
-"""
+# """
 
 progdict = {
         "molpro":"molpro -n $NSLOTS --nouse-logfile --no-xml-output -o output.dat input.dat",

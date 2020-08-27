@@ -13,9 +13,9 @@ class Options(object):
         self.energy_regex = kwargs.pop("energy_regex", "")
         self.success_regex = kwargs.pop("success_regex", "")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
-        self.program = kwargs.pop("program", "")
         self.fail_regex = kwargs.pop("fail_regex", "")
         self.time_limit = kwargs.pop("time_limit", None)
+        self.program = kwargs.pop("program", "")
         self.input_name = kwargs.pop("input_name", "input.dat")
         self.files_to_copy = kwargs.pop("files_to_copy", [])
         self.output_name = kwargs.pop("output_name", "output.dat")
@@ -51,14 +51,6 @@ class Options(object):
             self.command = kwargs.pop("command")
             # self.submitter = compute
         initialize_psi_options(kwargs)
-
-    @property
-    def program(self):
-        return self._program
-    
-    @program.setter
-    def program(self, val=""):
-        self._program = val
 
     @property
     def wait_time(self):
@@ -190,23 +182,6 @@ class Options(object):
             raise ValueError("""Optavc has no default for xtpl_input_style. 
                              Must be either [2, 2], [1, 3]""")
         self._xtpl_input_style = vals
-
-    @property
-    def fail_regex(self):
-        return self._fail_regex    
-
-    @fail_regex.setter
-    def fail_regex(self, val=None):
-        if val:
-            self._fail_regex = val
-        else:
-            if 'molpro' in self.program:
-                self.fail_regex = r'GLOBAL\sERROR\sfehler'
-            elif 'psi4' in self.program:
-                self.fail_regex = r'coffee'
-            elif 'cfour' in self.program:
-                self.fail_regex = r'(ERROR\s*)*'
-            
 
 def initialize_psi_options(kwargs):
     for key, value in kwargs.items():
