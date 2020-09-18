@@ -1,5 +1,16 @@
-import shutil, os
-import re
+"""
+Wrapper's for running optavc with a single method call.
+
+
+run_optavc() currently supports:
+    running finite differences of singlepoints to calculate Hessians
+    Running optimizations by performing finite differences of gradients.
+
+run_optavc_mpi()
+    has never been used or tested all code is legacy for use on NERSC. Use WILL require work
+
+"""
+
 from optavc.options import Options
 from . import optimize
 from . import findifcalcs
@@ -39,8 +50,9 @@ def run_optavc_mpi():
 
 
 def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, sow=True, path="."):
-    """ optavc driver meant to unify input
-    
+    """ optavc driver meant to unify input. Create options object, needed template objects, start
+    Hessian or Optimization calculation
+
     Parameters
     ----------
     jobtype: str
@@ -56,6 +68,9 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
     path: str
         for Hessian jobs only
 
+    Returns
+    -------
+    True : if job exited successfully
     """
 
     options_obj = Options(**options_dict)
@@ -77,16 +92,18 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
 
     if jobtype.upper() in ['OPT', "OPTIMIZATION"]:
         opt_obj = optimize.Optimization(molecule, input_obj, options_obj, xtpl_inputs)
-        opt_obj.run(restart_iteration, xtpl_restart)
+        return opt_obj.run(restart_iteration, xtpl_restart)
     elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
         if options_obj.xtpl:
-            findifcalcs.xtpl_hessian(molecule, options_obj, xtpl_inputs, path, sow)
+            findifcalcs.Hessian.xtpl_hessian(molecule, xtpl_inputs, options_obj, path, sow)
         else:
             hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path=path)
             if sow:
                 hess_obj.compute_result()
             else:
                 hess_obj.reap()
+            return True
     else:
         raise ValueError(
-            "Can only run deriv or optimizations. For gradients see findifcalcs.py to run or add wrapper here")
+            """Can only run deriv or optimizations. For gradients see findifcalcs.py to run or
+            add wrapper here""")

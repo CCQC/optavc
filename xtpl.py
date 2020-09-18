@@ -4,6 +4,7 @@ from psi4.driver.driver_cbs import corl_xtpl_helgaker_2
 
 from .findifcalcs import Gradient, Hessian
 
+
 def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
     """ Create a series of Hessian or Gradient objects for use the extrpolation procedure 
     
@@ -11,18 +12,23 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
     ----------
     job_type: str
     molecule: TemplateFileProcessor.molecule
+    xtpl_inputs : list[InputFileObj]
+        input file class instances for the two calculations needed for xtpl procedure
     xtpl_options: Options
         xtpl_ prefix indicates that this is used to set the 'standard' options from the
         corresponding xtpl_* options here in the creation of a Gradient or Hessian
+    iteration : int
+        used to create grad_obj with correct path and name in xtpl procedure
 
     Returns
     -------
     lsit[object]
     """
 
+    # TODO ideally this file would be removed and placed in finddifcalc.
+
     path_additions = ["high_corr", "low_corr"]
     derivative_calcs = []
-
 
     xtpl_regs = xtpl_options.xtpl_energy
     if xtpl_options.xtpl_input_style == [2, 2]:
@@ -50,7 +56,7 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
         # Will be used to create gradient object
         # correction defaults to empty string (yields 0) if nothing found
         options = copy.deepcopy(xtpl_options)
-        options.name = f"{xtpl_options.name}--{iteration}"
+        options.name = f"{xtpl_options.name}--{iteration:>02d}"
         options.program = xtpl_options.xtpl_programs[corl_index]
         options.success_regex = xtpl_options.xtpl_success[corl_index]
         inp_file_obj = xtpl_inputs[corl_index]
@@ -82,6 +88,7 @@ def energy_correction(basis_sets, deriv, ref_energies):
     final_hess = Matrix.from_array(low_cbs_hess.np + deriv[0].np - deriv[3].np + deriv[4].np)
     final_en = low_cbs_e + ref_energies[0] - ref_energies[3] + ref_energies[4]
     return final_en, final_hess, low_cbs_e
+
 
 def order_high_low(deriv, energies, input_style):
     """ Different orders for input_styles unify back to 

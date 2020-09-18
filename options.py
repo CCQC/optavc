@@ -1,7 +1,7 @@
 import psi4
 import os
 from typing import Union
-
+from . import submit_template_sp, submit_template
 
 # from .dask_iface import connect_Client
 
@@ -23,17 +23,16 @@ class Options(object):
         self.point_group = kwargs.pop("point_group", None)
         self.maxiter = kwargs.pop("maxiter", 20)
         self.mpi = kwargs.pop("mpi", None)
+        self.cluster = kwargs.pop("cluster", "VULCAN").upper()
         self.job_array = kwargs.pop("job_array", False)
         self.queue = kwargs.pop("queue", "")
         self.nslots = kwargs.pop("nslots", 4)
-        self.job_array_range = kwargs.pop("job_array", False)  # needs to be set by calling function
         self.email = kwargs.pop("email", None)
-        self.email_opts = kwargs.pop("email_opts", 'ae')
+        self.email_opts = kwargs.pop("email_opts", '')
         self.memory = kwargs.pop("memory", "")
-        self.cluster = kwargs.pop("cluster", "").upper()
         self.name = kwargs.pop("name", "STEP")
-        self.resub = kwargs.pop("resub",False)
-        self.resub_test = kwargs.pop("resub_test",False)
+        self.resub = kwargs.pop("resub", False)
+        self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
@@ -44,6 +43,8 @@ class Options(object):
         self.xtpl_corrections = kwargs.pop("xtpl_corrections", None)
         self.xtpl_wait_times = kwargs.pop("xtpl_wait_times", None)
         self.xtpl_input_style = kwargs.pop("xtpl_input_style", None)
+        self.resub_max = kwargs.pop("resub_max", 1)
+        self.job_array_range = kwargs.pop("job_array", False)  # needs to be set by calling function
 
         if self.mpi is not None:
             # from .mpi4py import compute
@@ -206,7 +207,19 @@ class Options(object):
                 self.fail_regex = r'coffee'
             elif 'cfour' in self.program:
                 self.fail_regex = r'(ERROR\s*)*'
-            
+
+    @property
+    def job_array(self):
+        return self._job_array
+
+    @job_array.setter
+    def job_array(self, val):
+        if self.cluster.upper() == 'VULCAN':
+            self._job_array = val
+        else:
+            # ensure that job_array is False for SAPELO, SAP2TEST etc
+            self._job_array = False
+
 
 def initialize_psi_options(kwargs):
     for key, value in kwargs.items():

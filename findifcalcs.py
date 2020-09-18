@@ -1,30 +1,41 @@
-import itertools
+
 import os
-import re
-import shutil
-import sys
 import time
-import subprocess
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 
 import numpy as np
 import psi4
-
-from . import submitter
 from .singlepoint import Calculation, SinglePoint
-from .submitter import make_sub_script
 
 
 class FiniteDifferenceCalc(Calculation):
+    f""" A Calculation consisting of a series of Singlepoints with needed machinery to submit,
+    collect and assemble these Singlepoints.
+    
+    Attributes
+    ----------
+
+    singlepoints: list of Singlepoint
+        all singlepoints
+    failed: list of Singlepoint
+        Singlepoints for which energy could not be found. Singlepoints are added and removed with 
+        each collect_failures call
+    job_ids: list of str
+        collection of job IDs from the cluster. job IDs are added whenever run is called. Removed
+        whenever resub is called. Resub will replace an ID if the singlepoint is rerun.
+    """
 
     def __init__(self, molecule, inp_file_obj, options, path="."):
 
         super().__init__(molecule, inp_file_obj, options, path)
-        self.energies = None
         self.result = None
-        self.singlepoints = []
-        self.failed = []
+        self.singlepoints = []  # all singlepoint objects
+        self.failed = []  # singlepoints that have failed
         self.job_ids = []
+        self.findifrec: object
+        self.result: psi4.core.Matrix
+        # This essentially defines an abstract attribute. Forces a child class to set these
+        # attributes without setting here
 
     @property
     def ndisps(self):
@@ -80,24 +91,30 @@ class FiniteDifferenceCalc(Calculation):
         return [singlepoint.run() for singlepoint in self.singlepoints]
 
     def get_energies(self):
-        return [sp.get_energy_from_output() for sp in self.singlepoints] 
+        return [sp.get_energy() for sp in self.singlepoints]
 
     @abstractmethod
     def run(self):
 
-        if not self.options.job_array or self.options.cluster.upper() == "SAPELO":
+        print(f"\nCalculating a {self.__class__}")
+        print(f"Need {self.ndisps} singlepoints\n")
+
+        self.options.job_array = self.cluster.enforce_job_array(self.options.job_array)
+
+        if not self.options.job_array:
             self.job_ids = self.run_individual()
+            # self.options.job_array = job_array
         else:
             self.options.job_array_range = (1, self.ndisps)
             working_directory = os.getcwd()
             os.chdir(self.path)
-            submitter.submit(self.options)
+            self.cluster.submit(self.options)  # submit output not captured. Job ID not needed
             os.chdir(working_directory)
 
     @abstractmethod
     def reap(self, force_resub=False):
-        """ Once all singlepoints have finished, collect all singlepoints and place in self.findifrec.
-        Child classes will use self.findifrec to construct the result
+        """ Once all singlepoints have finished, collect all singlepoints and place in
+        self.findifrec. Child classes will use self.findifrec to construct the result
 
         Raises
         ------
@@ -115,9 +132,11 @@ class FiniteDifferenceCalc(Calculation):
                         {[singlepoint.disp_num for singlepoint in self.failed]}""")
                 break
 
+        # This code may only be reached if self.collect_failures() is empty. check_status
+        # should have been called many times already.
         for e in self.singlepoints:
             key = e.key
-            energy = e.get_energy_from_output()
+            energy = e.get_energy()
             if key == 'reference':
                 self.findifrec['reference']['energy'] = energy
             else:
@@ -129,39 +148,55 @@ class FiniteDifferenceCalc(Calculation):
         return self.reap()
 
     def resub(self, force_resub=False):
-        """ Rerun each singlepoint in self.failed (that has finished) as an individual job. """
+        """ Rerun each singlepoint in self.failed as an individual job. """
 
-        if self.options.cluster.upper() != "SAPELO" or force_resub:
-            for singlepoint in self.failed:
-                singlepoint.run()  # job_array is now always False for a singlepoint.
-        else:
-            time.sleep(5)  # ensure that the queue has time to see all jobs
-            for job in self.job_ids:
-                try:
-                    finished, job_num = FiniteDifferenceCalc.pbs_qstat_info(job)
-                except RuntimeError:
-                    time.sleep(10)
-                    finished, job_num = FiniteDifferenceCalc.pbs_qstat_info(job)
-                    # let RuntimeError go if we still can't find job_state
+        if force_resub or self.options.job_array is True:
+            # Immediately rerun all failed jobs if singlepoints were previously submitted as an
+            # array OR if performing restart and could not reap.
+            # Must fill in job_ids to prevent jobs from being resubmitted on next call of resub
+            self.job_ids = [singlepoint.run() for singlepoint in self.failed]
+            print(f"\nJob IDS for forced resubmit\n{self.job_ids}\n")
+            self.options.job_array = False  # once we've resubmitted once. Turn array off
+            return
 
-                if not finished:
-                    continue
+        time.sleep(5)  # ensure that the queue has time to see all jobs
 
-                current_sp = self.singlepoints[job_num - 1]
-                # self.failed contains any jobs which have not completed successfully check jobs
-                # for success
-                # some jobs being rerun after success_string is printed add an additional check_status check
-                if current_sp in self.failed:
-                    # Troubleshooting. Seeing some jobs resubmitted which don't need to be. 
-                    # Ensure that self.failed is up to date (should have been updated
-                    # immediately before this was called) 
+        eliminations = []
+        resubmitting = []
 
-                    self.collect_failures()
-                    if current_sp in self.failed:
-                        
-                        new_job_id = current_sp.run()
-                        # replace job_id with new_job_id to ensure no duplicates
-                        self.job_ids[self.job_ids.index(job)] = new_job_id
+        for job in self.job_ids:
+            try:
+                finished, job_num = self.cluster.query_cluster(job)
+            except RuntimeError:
+                time.sleep(10)
+                finished, job_num = self.cluster.query_cluster(job)
+                # let RuntimeError go if we still can't find job_state after second attempt
+            if not finished:
+                # Jobs are only considered for resubmission if the cluster has marked as finished
+                continue
+
+            current_sp = self.singlepoints[job_num - 1]  # adjust job_num for zero based counting
+
+            self.collect_failures()  # refresh list of self.failed
+            self.check_resub_count()  # remove singlepoints from self.failed based on resub_max
+
+            if current_sp in self.failed:
+                resubmitting.append(current_sp)
+                new_job_id = current_sp.run()
+                current_sp.resub_count += 1
+                # replace job_id with new_job_id to ensure no duplicates
+                self.job_ids[self.job_ids.index(job)] = new_job_id
+            else:
+                # if job is not in failed and has finished remove it after loop is completed.
+                eliminations.append(job)
+
+        for job in eliminations:
+            self.job_ids.remove(job)
+
+        if resubmitting:
+            print("\nThe followin jobs have been resubmitted: ")
+            print([singlepoint.disp_num for singlepoint in resubmitting])
+            print("\n")
 
     def collect_failures(self, raise_error=False):
         """ Collect all jobs which did not successfully exit in self.failed.
@@ -172,7 +207,8 @@ class FiniteDifferenceCalc(Calculation):
         
         """
 
-        self.failed = []  # empty self.failed
+        # empty self.failed to prevent duplicates. Not using set since removal is necessary
+        self.failed = []
 
         for index, singlepoint in enumerate(self.singlepoints):
             # This if statement is only here for testing purposes
@@ -180,15 +216,17 @@ class FiniteDifferenceCalc(Calculation):
                 singlepoint.insert_Giraffe()
                 if singlepoint.check_resub():
                     self.failed.append(singlepoint)
-            # This if statement will be used for most optimizations
+            # This if statement will be used for an optimization
             try:
-                success = singlepoint.check_status(singlepoint.options.success_regex, 
+                success = singlepoint.check_status(singlepoint.options.energy_regex,
                                                    return_text=False)
                 if not success:
                     self.failed.append(singlepoint)
                 elif singlepoint in self.failed:
-                    #  Troubleshooting ensure that a successful job cannot persist in self.failed
-                    singlepoint.pop(self.failed.index(singlepoint))
+                    # self.failed was emptied.
+                    print("WARNING: self.failed was not purged correctly. Issue has been caught "
+                          "and the offending singlepoint has been removed from self.failed")
+                    self.failed.pop(self.failed.index(singlepoint))
             except FileNotFoundError:
                 self.failed.append(singlepoint)
 
@@ -199,59 +237,34 @@ class FiniteDifferenceCalc(Calculation):
 
         return False
 
-    @staticmethod
-    def pbs_qstat_info(job_id, return_stdout=False):
-        """  Run PBS/Torque command: qstat -f. Checks job_state for completion.
+    def check_resub_count(self):
+        """ Update self.failed to not contain any singlepoints which have already been submitted
+        the maximum number of times. """
 
-        Parameters
-        ----------
-        job_id : str
-        return_stdout : bool, optional
-
-        Returns
-        -------
-        bool : True if job_state is 'C' False otherwise
-        int: Translation of Job_Name to displacement number of singlepoint
-
-        Raises
-        ------
-        RuntimeError : if no match is found for job_state or unable to find job_number
-
-        """
-
-        job_state = False
-        pipe = subprocess.PIPE
-        process = subprocess.run(['qstat', '-f', f'{job_id}'], stdout=pipe, stderr=pipe, encoding='UTF-8')
-        output = str(process.stdout)
-
-        try:
-            completion = re.search(r"\s*job_state\s=\s([A-Z])", output).group(1)
-        except AttributeError as e:
-            print(f"Could not find job_state in output of qstat -f {job_id}")
-            raise RuntimeError from e
+        if self.failed:
+            resub_required = True
         else:
-            if not completion:
-                raise RuntimeError(f"Could not determine state of job {job_id}")
-            elif completion == 'C':  # jobs hav finished
-                job_state = True
+            return
 
-        name_itr_num = r"\s*Job_Name\s=\s*.*(\-+\d*)?\-(\d*)"
+        eliminations = []
 
-        try:
-            job_num = int(re.search(name_itr_num, output).group(2))
-            print(job_num)
-        except AttributeError as e:
-            print("\nCould not find displacement number in Job_Name using standard optavc naming convention\n")
-            print(output)
-            raise RuntimeError from e
+        for singlepoint in self.failed:
+            if singlepoint.resub_count > self.options.resub_max:
+                eliminations.append(singlepoint)
 
-        if return_stdout:
-            return job_state, job_num, str(process.stdout)
-        return job_state, job_num
+        for singlepoint in eliminations:
+            self.failed.remove(singlepoint)
+
+        if resub_required and not self.failed:
+            print("The following singlepoints have failed and exceeded resub_max Optavc has "
+                  "finished as many singlepoints as possible")
+            print([singlepoint.disp_num for singlepoint in eliminations])
+            raise RuntimeError("1 or more singlepoints have failed and exceeded the number of"
+                               "allowed resubmissions")
 
 
 class Gradient(FiniteDifferenceCalc):
-    
+
     def __init__(self, options, input_obj, molecule, path):
         super().__init__(options, input_obj, molecule, path)
         
@@ -307,7 +320,7 @@ class Hessian(FiniteDifferenceCalc):
             self.options.name = 'Hess'
         super().run() 
 
-    def reap(self, force_resub=True):
+    def reap(self, force_resub=False):
 
         super().reap(force_resub)
 
@@ -345,7 +358,6 @@ class Hessian(FiniteDifferenceCalc):
             else:
                 separate_idx = 1
 
-            print(f"Trying to compute hessian. sow is {sow}")
             hess_obj.options.name = 'hess'
 
             if index not in [0, separate_idx] or sow is False:
@@ -359,7 +371,7 @@ class Hessian(FiniteDifferenceCalc):
         basis_sets = options.xtpl_basis_sets
         # Same order as in xtpl_grad()
         
-        #xtpl.order_high_low
+        # xtpl.order_high_low
         ordered_en, ordered_hess = order_high_low(hessians, ref_energies, options.xtpl_input_style)
         
         final_en, final_hess, _ = energy_correction(basis_sets, ordered_hess, ordered_en)
@@ -370,8 +382,6 @@ class Hessian(FiniteDifferenceCalc):
         print(f"final_hess:\n {final_hess.np}")
         print("===================================================================\n\n")
 
-        print("Any imaginary freqeuency mode warnings from psi4 should now be heeded")
-        print("All other warnings may be safely ignored")
         psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
         wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
         wfn.set_hessian(final_hess)

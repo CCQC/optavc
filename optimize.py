@@ -1,4 +1,5 @@
 import shutil, os
+import copy
 
 import psi4
 import numpy as np
@@ -8,24 +9,24 @@ from .singlepoint import Calculation
 from .findifcalcs import Gradient
 from .xtpl import xtpl_wrapper, energy_correction, order_high_low
 
+
 class Optimization(Calculation):
 
     def __init__(self, molecule, input_obj, options, xtpl_inputs=None):
         super().__init__(molecule, input_obj, options)
         self.step_molecules = []
-        self.name = options.name
         self.xtpl_inputs = xtpl_inputs
 
     def run(self, restart_iteration=0, xtpl_restart=None):
         
         # copy step if restart would have overwritten some steps
         self.copy_old_steps(restart_iteration, xtpl_restart)        
-        
+
         for iteration in range(self.options.maxiter):
             self.step_molecules.append(self.molecule)
             # compute the gradient for the current molecule --
             # the path for gradient computation is set to "STEP0x"
-            
+
             print(f"\n====================Beginning new step {iteration}======================\n") 
             
             if self.options.xtpl:
@@ -69,8 +70,11 @@ class Optimization(Calculation):
             from .mpi4py_iface import slay
             slay()  # kill all workers before exiting
 
+        print("\n\n OPTIMIZATION HAS FINISHED!\n\n")
+        return True
+
     def single_grad(self, iteration, restart_iteration, inp_file_obj=None, options=None,
-                    step_path=None, xtpl_restart=False, grad_obj=None):
+                    step_path=None, xtpl_reap=False, grad_obj=None):
         """ A standard, single gradient for an optimization.
         Parameters
         ----------
@@ -81,7 +85,8 @@ class Optimization(Calculation):
             input file for each needed singlepoint
         options: options.Options, optional
         step_path: str, optional
-        xtpl_restart : bool, optional
+        xtpl_reap : bool, optional
+            not the same as options.xtpl_restart
         grad_obj: Object, optional
             if provided overrides everything. Use gradient object for calculation
 
@@ -97,11 +102,11 @@ class Optimization(Calculation):
             if inp_file_obj is None:
                 inp_file_obj = self.inp_file_obj
             if options is None:
-                options = self.options
+                options = copy.deepcopy(self.options)  # TODO revist
             if step_path is None:
                 step_path = f"STEP{iteration:>02d}"
             
-            options.name = f"{self.name}--{iteration:02d}"
+            options.name = f"{self.options.name}--{iteration:02d}"
 
             grad_obj = Gradient(self.molecule, inp_file_obj, options, step_path)
 
@@ -111,13 +116,13 @@ class Optimization(Calculation):
 
         try:
             if iteration < restart_iteration:
-                grad = grad_obj.reap(force_resub=True)  # could be 1 or more  gradients
-            elif xtpl_restart:
+                grad = grad_obj.reap(force_resub=True)  # could be 1 or more gradients
+            elif xtpl_reap:
                 grad = grad_obj.reap(force_resub=True)
             else:
                 grad = grad_obj.compute_result()
         except RuntimeError as e:
-            if xtpl_restart:
+            if xtpl_reap:
                 print(str(e))
                 print(f"""[CRITICAL] - could not compute gradient at step {iteration} \
                         sub-step {grad_obj.path}""")
@@ -154,7 +159,7 @@ class Optimization(Calculation):
 
             # want to set sow = False if iteration < restart_iteration
             # if index not in [0, 2]
-            # if xtpl_restart and index == 0
+            # if xtpl_reap and index == 0
             acceptable_index = index not in [0, separate_idx]
             low_corr_restart = xtpl_restart and index == 0 and iteration == restart_iteration
 
@@ -163,9 +168,7 @@ class Optimization(Calculation):
             else:
                 restart = False
 
-            grad_obj.options.name = f"{grad_obj.options.name}--{iteration:>02d}"
-    
-            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_restart=restart,
+            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_reap=restart,
                                               grad_obj=grad_obj)
 
             gradients.append(grad)
@@ -175,8 +178,10 @@ class Optimization(Calculation):
         # These are "correlation gradients" i.e. energy_regex should correspond
         # only to correlation energy
 
-        # Different orders for input_styles unify back to high_corr -> low corr large_basis -> small_basis
-        ordered_en, ordered_grads = order_high_low(gradients, ref_energies, self.options.xtpl_input_style)
+        # Different orders for input_styles unify back to high corr -> low corr and large basis ->
+        # small basis
+        ordered_en, ordered_grads = order_high_low(gradients, ref_energies,
+                                                   self.options.xtpl_input_style)
         
         final_en, final_grad, low_CBS_e = energy_correction(basis_sets, ordered_grads, ordered_en)
 
@@ -187,7 +192,8 @@ class Optimization(Calculation):
         print(f"CCSD - mp2 {ref_energies[0] - ref_energies[1]}")
         print(f"xtpl energy: {final_en}")
         print(f"energies {ordered_en}")
-        print(f"gradients:\n {chr(10).join([str(i.np) for i in ordered_grads])}")  # chr(10) is ascii \n
+        # chr(10) is ascii \n
+        print(f"gradients:\n {chr(10).join([str(i.np) for i in ordered_grads])}")
         print(
             f"\n=====================================XTPL=====================================\n\n")
 
@@ -201,17 +207,17 @@ class Optimization(Calculation):
         
         dir_test = f'{self.path}/STEP{restart_iteration:0>2d}'
         
-        # if only the high_corr exists when restarting and xtpl_restart was not specified, 
+        # if only the high_corr exists when restarting and xtpl_reap was not specified,
         # the high_corr jobs will be rurun and a copy of all steps will be made.
 
-        if (os.path.exists(dir_test) or
-            (xtpl_restart and os.path.exists(f'{dir_test}/{low_corr}'))):
-            
+        if os.path.exists(dir_test) or (xtpl_restart and os.path.exists(f'{dir_test}/low_corr')):
+
                 itr = 0
-                # determine the number of directories of the form STEPXX exist
+                # determine the number of directories of the form STEPXX exist. What number to
+                # start at. itr will exit loop as STEP(Max+1).
                 while os.path.exists(f'{self.path}/STEP{itr:>02d}'):
                     itr += 1
-                
+
                 restart_itr = 1
                 while os.path.exists(f'{self.path}/{restart_itr}_opt'):
                     restart_itr += 1
@@ -226,12 +232,17 @@ class Optimization(Calculation):
                                         f'{index + 1}_opt')
                         # copy tree must be able to perform a mkdir for python <= 3.8
                         shutil.rmtree(f'{index}_opt')
-                
+
                 for step_idx in range(itr):
                     shutil.copytree(f'{self.path}/STEP{step_idx:>02d}', 
                                     f'{self.path}/1_opt/STEP{step_idx:>02d}')
+
+                    # Keep STEP(restart) if xtpl_restart. Otherwise remove all >= restart_iteration
                     if step_idx >= restart_iteration:
-                        shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')
+                        if step_idx == restart_iteration and xtpl_restart:
+                            pass
+                        else:
+                            shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')
 
                 shutil.copyfile(f'{self.path}/output.dat', f'{self.path}/1_opt/output.dat')
                 with open(f'{self.path}/output.dat', 'w+'):
