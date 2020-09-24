@@ -94,15 +94,19 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
         opt_obj = optimize.Optimization(molecule, input_obj, options_obj, xtpl_inputs)
         return opt_obj.run(restart_iteration, xtpl_restart)
     elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
+
+        if path == '.':
+            path = './HESS'
+
         if options_obj.xtpl:
             findifcalcs.Hessian.xtpl_hessian(molecule, xtpl_inputs, options_obj, path, sow)
         else:
-            hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path=path)
+            hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
             if sow:
                 hess_obj.compute_result()
             else:
-                hess_obj.reap()
-            return True
+                hess_obj.reap(force_resub=True)
+        return True
     else:
         raise ValueError(
             """Can only run deriv or optimizations. For gradients see findifcalcs.py to run or

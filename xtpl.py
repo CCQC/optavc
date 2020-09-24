@@ -5,9 +5,9 @@ from psi4.driver.driver_cbs import corl_xtpl_helgaker_2
 from .findifcalcs import Gradient, Hessian
 
 
-def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
+def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, path="./HESS", iteration=0):
     """ Create a series of Hessian or Gradient objects for use the extrpolation procedure 
-    
+
     Parameters
     ----------
     job_type: str
@@ -17,6 +17,8 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
     xtpl_options: Options
         xtpl_ prefix indicates that this is used to set the 'standard' options from the
         corresponding xtpl_* options here in the creation of a Gradient or Hessian
+    path: str, optional
+        can be used to redirect Hessian displacements from HESS/*_corr to path/*_corr
     iteration : int
         used to create grad_obj with correct path and name in xtpl procedure
 
@@ -56,7 +58,6 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
         # Will be used to create gradient object
         # correction defaults to empty string (yields 0) if nothing found
         options = copy.deepcopy(xtpl_options)
-        options.name = f"{xtpl_options.name}--{iteration:>02d}"
         options.program = xtpl_options.xtpl_programs[corl_index]
         options.success_regex = xtpl_options.xtpl_success[corl_index]
         inp_file_obj = xtpl_inputs[corl_index]
@@ -66,12 +67,13 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
         options.energy_regex = energy_regex
         
         if job_type.upper() == 'GRADIENT':
+            options.name = f"{xtpl_options.name}--{iteration:>02d}"
             step_path = f"STEP{iteration:>02d}/{path_additions[corl_index]}"
             grad_obj = Gradient(molecule, inp_file_obj, options, step_path)
             derivative_calcs.append(grad_obj)
         elif job_type.upper() == "HESSIAN":
-            path = f"./XTPL/{path_additions[corl_index]}"
-            hess_obj = Hessian(molecule, inp_file_obj, options, path)
+            hess_path = f"{path}/{path_additions[corl_index]}"
+            hess_obj = Hessian(molecule, inp_file_obj, options, hess_path)
             derivative_calcs.append(hess_obj)
 
     return derivative_calcs

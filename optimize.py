@@ -16,6 +16,7 @@ class Optimization(Calculation):
         super().__init__(molecule, input_obj, options)
         self.step_molecules = []
         self.xtpl_inputs = xtpl_inputs
+        self.paths = []  # safety measure. No gradients should share the same path object
 
     def run(self, restart_iteration=0, xtpl_restart=None):
         
@@ -28,7 +29,7 @@ class Optimization(Calculation):
             # the path for gradient computation is set to "STEP0x"
 
             print(f"\n====================Beginning new step {iteration}======================\n") 
-            
+
             if self.options.xtpl:
                 # Calls single_grad repeatedly
                 ref_energy, grad = self.xtpl_grad(iteration, restart_iteration, xtpl_restart)
@@ -120,6 +121,7 @@ class Optimization(Calculation):
             elif xtpl_reap:
                 grad = grad_obj.reap(force_resub=True)
             else:
+                self.enforce_unique_paths(grad_obj)
                 grad = grad_obj.compute_result()
         except RuntimeError as e:
             if xtpl_reap:
@@ -148,7 +150,8 @@ class Optimization(Calculation):
         ref_energies = []
 
         for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.molecule,
-                                                      self.xtpl_inputs, self.options, iteration)):
+                                                      self.xtpl_inputs, self.options,
+                                                      iteration=iteration)):
 
             # [2, 2] -> grab the low correlation, small basis calculations in single input file
             # [1, 3] -> do all low correlation calculations in single output file
@@ -247,3 +250,31 @@ class Optimization(Calculation):
                 shutil.copyfile(f'{self.path}/output.dat', f'{self.path}/1_opt/output.dat')
                 with open(f'{self.path}/output.dat', 'w+'):
                     pass  # clear file
+
+    def enforce_unique_paths(self, grad_obj):
+        """ Ensure that for an optimization no two gradients can be run in the same directory. Keep
+        a list of paths used in a optimization up to date.
+
+        Method should be called whenever a new Gradient in created and before it is run
+
+        Parameters
+        ----------
+        grad_obj: Gradient
+            The newly created Gradient object
+
+        Notes
+        -----
+        This is a warning for future development: If the gradient's path is not updated with each
+        step, collect_failures() will allow new steps to be taken in the same directory. When
+        optavc checks the relevant output files, it will find them to be completed and run
+        another calculation this will dump new jobs onto the cluster each time.
+
+        Raises
+        ------
+        ValueError: This should not be caught. Indicates that changes
+        """
+        if grad_obj.path in self.paths:
+            raise ValueError("Gradient's path matches gradient for a previous step. Cannot run. "
+                             "This can cause failure in FindifCalc's collect_failures() method")
+        else:
+            self.paths.append(grad_obj.path)

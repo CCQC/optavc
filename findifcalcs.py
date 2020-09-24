@@ -96,19 +96,16 @@ class FiniteDifferenceCalc(Calculation):
     @abstractmethod
     def run(self):
 
-        print(f"\nCalculating a {self.__class__}")
-        print(f"Need {self.ndisps} singlepoints\n")
-
         self.options.job_array = self.cluster.enforce_job_array(self.options.job_array)
 
         if not self.options.job_array:
             self.job_ids = self.run_individual()
-            # self.options.job_array = job_array
         else:
             self.options.job_array_range = (1, self.ndisps)
             working_directory = os.getcwd()
             os.chdir(self.path)
-            self.cluster.submit(self.options)  # submit output not captured. Job ID not needed
+            # submit output not captured. Job ID not needed for an array
+            self.cluster.submit(self.options)
             os.chdir(working_directory)
 
     @abstractmethod
@@ -126,7 +123,9 @@ class FiniteDifferenceCalc(Calculation):
             if self.options.resub:
                 self.resub(force_resub)
                 force_resub = False  # only try (at most) 1 forced resubmit
-                time.sleep(60)  # go to sleep for 1 minute
+                # use minimum time or user's defined time
+                check_every = self.cluster.resub_delay(self.options.sleepy_sleep_time)
+                time.sleep(check_every)
             else:
                 print(f"""Resub has not been turned on. The following jobs failed: \n
                         {[singlepoint.disp_num for singlepoint in self.failed]}""")
@@ -175,7 +174,13 @@ class FiniteDifferenceCalc(Calculation):
                 # Jobs are only considered for resubmission if the cluster has marked as finished
                 continue
 
-            current_sp = self.singlepoints[job_num - 1]  # adjust job_num for zero based counting
+            try:
+                current_sp = self.singlepoints[job_num - 1]
+                # adjust job_num for zero based counting
+            except IndexError:
+                print("why is this failing now??")
+                print(f"job_number: {job_num}")
+                raise
 
             self.collect_failures()  # refresh list of self.failed
             self.check_resub_count()  # remove singlepoints from self.failed based on resub_max
@@ -196,7 +201,6 @@ class FiniteDifferenceCalc(Calculation):
         if resubmitting:
             print("\nThe followin jobs have been resubmitted: ")
             print([singlepoint.disp_num for singlepoint in resubmitting])
-            print("\n")
 
     def collect_failures(self, raise_error=False):
         """ Collect all jobs which did not successfully exit in self.failed.
@@ -292,7 +296,7 @@ class Gradient(FiniteDifferenceCalc):
         if not self.options.mpi:
             super().reap(force_resub)
         else:
-            # no resub, mpi mode.
+            # legacy mpi code.
             for idx, e in enumerate(self.singlepoints):
                 key = e.key
                 if key == 'reference':
@@ -309,7 +313,7 @@ class Gradient(FiniteDifferenceCalc):
 class Hessian(FiniteDifferenceCalc):
 
     def __init__(self, molecule, input_obj, options, path):
-        super().__init__(molecule, input_obj, options, path="./HESS")
+        super().__init__(molecule, input_obj, options, path)
     
         self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         self.findifrec = psi4.driver_findif.hessian_from_energy_geometries(self.psi4_mol_obj, -1)
@@ -350,7 +354,8 @@ class Hessian(FiniteDifferenceCalc):
         hessians = []
         ref_energies = []
 
-        for index, hess_obj in enumerate(xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options)):
+        for index, hess_obj in enumerate(xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options,
+                                                      path)):
             
             # separate_mp2 denotes when a "new" calculation needs to be performed
             if hess_obj.options.xtpl_input_style == [2, 2]:
@@ -361,7 +366,7 @@ class Hessian(FiniteDifferenceCalc):
             hess_obj.options.name = 'hess'
 
             if index not in [0, separate_idx] or sow is False:
-                hessian = hess_obj.reap()
+                hessian = hess_obj.reap(force_resub=True)
             else:
                 hessian = hess_obj.compute_result()
 

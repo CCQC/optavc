@@ -1,7 +1,6 @@
 import psi4
 import os
 from typing import Union
-from . import submit_template_sp, submit_template
 
 # from .dask_iface import connect_Client
 
@@ -34,6 +33,7 @@ class Options(object):
         self.resub = kwargs.pop("resub", False)
         self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
+        self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
         self.xtpl_programs = kwargs.pop("xtpl_programs", None)

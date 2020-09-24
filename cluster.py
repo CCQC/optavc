@@ -33,6 +33,7 @@ class Cluster:
         self.job_state = attributes.get('job_state')
         self.job_name = attributes.get('job_name')
         self.job_id = attributes.get('job_id')
+        self.resub_delay = attributes.get('resub_delay')
 
     @staticmethod
     def cluster_attributes(cluster_name):
@@ -41,18 +42,21 @@ class Cluster:
                                  'queue_info': ['qacct', '-j', None],
                                  'job_state': None,
                                  'job_name': r'jobname\s+.*(--\d*)?-(\d*)',
-                                 'job_id': r'Your\s*job\s*(\d*)'},
+                                 'job_id': r'Your\s*job\s*(\d*)',
+                                 'resub_delay': lambda sleep: max(10, sleep)},
                       'SAPELO': {'submit': 'qsub',
                                  'queue_info': ['qstat', '-f', None],
                                  'job_state': r'\s*job_state\s=\sC',
                                  'job_name': r'\s*Job_Name\s=\s*.*(\-+\d*)?\-(\d*)',
-                                 'job_info': None},
+                                 'job_id': r'(\d*)\.sapelo2',
+                                 'resub_delay': lambda sleep: max(40, sleep)},
                       'SAP2TEST': {'submit': 'sbatch',
                                    'queue_info': ['sacct', '-X', '--format=JobID,JobName%60,STATE',
                                                   '-j', None],
                                    'job_state': None,
-                                   'job_name': r'\s.+(--\d*)?(-\d+)',
-                                   'job_id': r'\.*(\d+)'}}
+                                   'job_name': r'\s.+(--\d*)?-(\d+)',
+                                   'job_id': r'\.*(\d+)',
+                                   'resub_delay': lambda sleep: max(40, sleep)}}
 
         return attributes.get(cluster_name)
 
@@ -126,7 +130,8 @@ class Cluster:
         return job_state, job_number
 
     def get_job_id(self, submit_output, job_array=False):
-        """
+        """ Use regex to grab job_id. Regexes should be written for the stdout for the cluster's
+        submit command
 
         Parameters
         ----------
@@ -147,14 +152,11 @@ class Cluster:
         if self.job_id:
             return re.search(self.job_id, submit_output).group(1)
         else:
-            if self.cluster_name == 'SAPELO':
-                return submit_output[-1]  # remove newline
-            else:
-                raise NotImplementedError("Cannot identify job_id on this cluster")
+            raise NotImplementedError("Cannot identify job_id on this cluster")
 
     def get_job_number(self, output):
-        """ Parse output of job_info command for the job number. All cluster's currently use
-        regex to simply fetch the number
+        """ Parse output of the `job_info` command for job number number. All cluster's
+        currently use regex to simply fetch the number
 
         Parameters
         ----------
@@ -163,7 +165,8 @@ class Cluster:
 
         Returns
         -------
-        int: number corresponding to the singlepoint run in 1 based indexing
+        int: number corresponding to the singlepoint run in 1 based indexing. Singlepoint.disp_num
+        is 0 indexed
 
         """
 
@@ -191,6 +194,11 @@ class Cluster:
         Returns
         -------
         bool : True if job is done
+
+        Notes
+        -----
+        either use regex to look for pattern indicating job has finished or must supply cluster
+        specific check in this method
 
         """
 
@@ -260,23 +268,29 @@ class Cluster:
             'nslots': options.nslots,
             'jarray': '1-{}'.format(job_num),
             'progname': progname,
-            'prog': options.program,
             'cline': progdict[progname],
             'name': options.name
         }
 
         if self.cluster_name in ['SAPELO', "SAP2TEST"]:
+
             odict.update({'mod_load': sapelo_load.get(progname),
                           'memory': options.memory,
                           'time': options.time_limit
                           })
+
             if options.email:
                 odict.update({
                     'email': options.email,
                     'email_opts': options.email_opts})
+
             if self.cluster_name == 'SAP2TEST':
                 odict.update({'mod_load': sap2test_load.get(progname)})
-        else:
+
+        elif self.cluster_name == 'VULCAN':
+
+            odict.update({'prog': vulcan_load.get(progname)})
+
             if options.job_array:
                 odict.update({'tc': str(job_num)})
 
@@ -381,6 +395,11 @@ slurm_email_template = [slurm_template[0], slurm_email, slurm_template]
 progdict = {
     "molpro": "molpro -n $NSLOTS --nouse-logfile --no-xml-output -o output.dat input.dat",
     "psi4": "psi4 -n $NSLOTS"
+}
+
+vulcan_load = {
+    "molpro": "molpro@2010.1.67+mpi",
+    "psi4": "psi4@master"
 }
 
 sapelo_load = {
