@@ -11,39 +11,19 @@ For simplicity. Run pytest test_optavc.py
 
 import pytest
 import os
-import glob
-import shutil
-import re
+import socket
 
 import optavc
-from optavc.tests.utils import options_4_cluster
+from optavc.tests import utils
 
 """ Functions for test setup """
 
-
-def initialize():
-    """Clear directory of all output """
-    templates = ['template.dat', 'template1.dat', 'template2.dat', 'test_z.py']
-
-    saved = []
-    for name in templates:
-        with open(name, 'r') as f:
-            saved.append(f.read())
-
-    # glob matches files in *nix matching expression returns list
-    leftovers = [glob.glob(f'{os.getcwd()}/{string}') for string in ["HESS", 'STEP*', '*opt', 'psi.*',
-                                                                     'output.default*', '.*']]
-    del_list = [item for sublist in leftovers for item in sublist]  # flatten leftovers glob list
-
-    for deletion in del_list:
-        try:
-            os.remove(deletion)
-        except IsADirectoryError:
-            shutil.rmtree(deletion, ignore_errors=True)
-
-    for idx, backup in enumerate(saved):
-        with open(templates[idx], 'w+') as f:
-            f.write(backup)
+host = socket.gethostname()
+if 'ss-sub' in host or 'sapelo' in host or 'vlogin' in host:
+    pass
+else:
+    pass
+    # raise RuntimeError("This test cannot be run on this machine")
 
 
 def remove_outputs(xtpl, hess=False):
@@ -59,7 +39,7 @@ def remove_outputs(xtpl, hess=False):
             os.remove(f'HESS/high_corr/{i}/output.dat')
 
 
-options1, options2 = options_4_cluster()
+options1, options2 = utils.options_4_cluster("calc_1")
 
 """ Tests """
 
@@ -70,11 +50,11 @@ def test_opt(options):
     at STEP02 try to restart the last step
     """
 
-    initialize()
+    # utils.initialize()
     xtpl = options.pop('xtpl')
 
     try:
-        assert optavc.run_optavc("OPT", options, restart_iteration=0)
+        assert optavc.run_optavc("OPT", options, restart_iteration=0, test_input=True)
 
         remove_outputs(xtpl)
 
@@ -89,7 +69,7 @@ def test_hessian(options):
     """ Run a Hessian. Stop. Try to re-reap that Hessian stop. Delete some singlepoints and
     re-reap """
 
-    initialize()
+    utils.initialize()
     xtpl = options.pop('xtpl')
 
     try:

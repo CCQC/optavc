@@ -1,6 +1,5 @@
 # Find initial Hessian
 import shutil, os
-from optavc.submitter import submitoptavc
 
 options_kwargs = {
     'template_file_path':

@@ -1,8 +1,8 @@
-import shutil, os
+import shutil
+import os
 import copy
 
 import psi4
-import numpy as np
 
 from .molecule import Molecule
 from .singlepoint import Calculation
@@ -18,10 +18,10 @@ class Optimization(Calculation):
         self.xtpl_inputs = xtpl_inputs
         self.paths = []  # safety measure. No gradients should share the same path object
 
-    def run(self, restart_iteration=0, xtpl_restart=None):
+    def run(self, restart_iteration=0, user_xtpl_restart=None):
         
         # copy step if restart would have overwritten some steps
-        self.copy_old_steps(restart_iteration, xtpl_restart)        
+        self.copy_old_steps(restart_iteration, user_xtpl_restart)
 
         for iteration in range(self.options.maxiter):
             self.step_molecules.append(self.molecule)
@@ -31,12 +31,15 @@ class Optimization(Calculation):
             print(f"\n====================Beginning new step {iteration}======================\n") 
 
             if self.options.xtpl:
-                # Calls single_grad repeatedly
-                ref_energy, grad = self.xtpl_grad(iteration, restart_iteration, xtpl_restart)
+                xtpl_gradients = self.create_xtpl_gradients(iteration, restart_iteration,
+                                                            user_xtpl_restart)
+                ref_energy, grad = self.run_xtpl_gradients(iteration, restart_iteration,
+                                                           xtpl_gradients)
             else:
-                grad, grad_obj = self.single_grad(iteration, restart_iteration)
+                grad_obj = self.create_opt_gradient(iteration)
+                grad = self.run_gradient(iteration, restart_iteration, grad_obj)
                 ref_energy = grad_obj.get_reference_energy()
-            
+
             try:
                 # put the gradient, energy, and molecule for the current step in psi::Environment
                 # before calling psi4.optking()
@@ -74,52 +77,39 @@ class Optimization(Calculation):
         print("\n\n OPTIMIZATION HAS FINISHED!\n\n")
         return True
 
-    def single_grad(self, iteration, restart_iteration, inp_file_obj=None, options=None,
-                    step_path=None, xtpl_reap=False, grad_obj=None):
-        """ A standard, single gradient for an optimization.
+    def run_gradient(self, iteration, restart_iteration, grad_obj, xtpl_reap=False,
+                     force_resub=True):
+        """ run a single gradient for an optimization. Reaping if iteration, restart_iteration,
+        and xtpl_reap indicate this is possible
+
         Parameters
         ----------
         iteration: int
         restart_iteration: int
             indicates (with iteration) whether to sow/run or just reap previous energies
-        inp_file_obj: template.InputFile, optional
-            input file for each needed singlepoint
-        options: options.Options, optional
-        step_path: str, optional
         xtpl_reap : bool, optional
             not the same as options.xtpl_restart
-        grad_obj: Object, optional
-            if provided overrides everything. Use gradient object for calculation
+        grad_obj: findifcalcs.Gradient
+        force_resub: bool, optional
+            If the FIRST reap fails, resubmit all jobs to cluster for any gradient that "should"
+            have already been completed based on iteration, restart_iteration, and xtpl_reap
 
         Returns
         -------
-        tuple
-            1 or 2 gradients: psi4.core.Matrix 
-            grad_obj: gradient.Gradient
+        grad: psi4.core.Matrix
+
+        Notes
+        -----
+        Reassemble gradients as possible. Always restart based on iteration number
+        If the we're rechecking the same input file in xtpl_procedure, xtpl_reap must be set
+
         """
-
-        # Create a gradient object with Optimization's attributes if not provided
-        if grad_obj is None:
-            if inp_file_obj is None:
-                inp_file_obj = self.inp_file_obj
-            if options is None:
-                options = copy.deepcopy(self.options)  # TODO revist
-            if step_path is None:
-                step_path = f"STEP{iteration:>02d}"
-            
-            options.name = f"{self.options.name}--{iteration:02d}"
-
-            grad_obj = Gradient(self.molecule, inp_file_obj, options, step_path)
-
-        # reassemble gradients as possible
-        # Always restart based on iteration number
-        # Then consider if the we're rechecking the same input file in xtpl procedure
 
         try:
             if iteration < restart_iteration:
-                grad = grad_obj.reap(force_resub=True)  # could be 1 or more gradients
+                grad = grad_obj.reap(force_resub)  # could be 1 or more gradients
             elif xtpl_reap:
-                grad = grad_obj.reap(force_resub=True)
+                grad = grad_obj.reap(force_resub)
             else:
                 self.enforce_unique_paths(grad_obj)
                 grad = grad_obj.compute_result()
@@ -132,25 +122,57 @@ class Optimization(Calculation):
                 print(str(e))
                 print(f"[CRITICAL] - could not compute gradient at step {iteration}")
             raise
-        except FileNotFoundError as e:
-            print(f"Missing {self.options.output_name}")
+        except FileNotFoundError:
+            print(f"Missing an output file: {self.options.output_name}")
             raise
         except ValueError as e:
             print(str(e))
             raise
 
-        return grad, grad_obj
+        return grad
 
-    def xtpl_grad(self, iteration, restart_iteration, xtpl_restart=None):
-        """ Call single_grad repeatedly using gradient objects from xtpl.xtpl_wrapper
-            perform a basis set extrapolation and correlation correction
+    def create_opt_gradient(self, iteration):
+        """  Create Gradient with path and name updated by iteration
+
+        Parameters
+        ----------
+        iteration: int
+
+        Returns
+        -------
+        grad_obj : findifcalcs.Gradient
+
         """
 
-        gradients = []
-        ref_energies = []
+        options = copy.deepcopy(self.options)
+        options.name = f"{self.options.name}--{iteration:02d}"
+        step_path = f"STEP{iteration:>02d}"
+        return Gradient(self.molecule, self.inp_file_obj, options, step_path)
+
+    def create_xtpl_gradients(self, iteration, restart_iteration, user_xtpl_restart=None):
+        """ Uses xtpl_wrapper to create each gradient object needed in the xtpl procedure
+        and determine which gradients may be reaped and which may be calculated.
+
+        Parameters
+        ----------
+        iteration: int
+        restart_iteration: int
+            which iteration shall we begin calculating at (0 based indexing)
+        user_xtpl_restart: bool
+            xtpl_restart parameter from optavc.run_optavc. Begin calculations at low_corr. reap
+            high_corr
+
+        Returns
+        -------
+        list[tuple(Gradient, bool)]: the Gradient object ready to be run and a flag for whether
+        the gradient must be computed or may be reaped.
+
+        """
+
+        run_grad = []
 
         for index, grad_obj in enumerate(xtpl_wrapper("GRADIENT", self.molecule,
-                                                      self.xtpl_inputs, self.options,
+                                                      self.xtpl_inputs, self.options, path=".",
                                                       iteration=iteration)):
 
             # [2, 2] -> grab the low correlation, small basis calculations in single input file
@@ -164,15 +186,40 @@ class Optimization(Calculation):
             # if index not in [0, 2]
             # if xtpl_reap and index == 0
             acceptable_index = index not in [0, separate_idx]
-            low_corr_restart = xtpl_restart and index == 0 and iteration == restart_iteration
+            low_corr_restart = user_xtpl_restart and index == 0 and iteration == restart_iteration
 
             if acceptable_index or low_corr_restart:
                 restart = True
             else:
                 restart = False
 
-            grad, grad_obj = self.single_grad(iteration, restart_iteration, xtpl_reap=restart,
-                                              grad_obj=grad_obj)
+            run_grad.append((grad_obj, restart))
+
+        return run_grad
+
+    def run_xtpl_gradients(self, iteration, restart_iteration, xtpl_gradients):
+        """ Calls run_gradient for each gradient in the xtpl procedure and assembles into 1, final
+        gradient
+
+        Parameters
+        ----------
+        iteration: int
+        restart_iteration: int
+            which iteration shall we begin calculating at (0 based indexing)
+
+        Returns
+        -------
+        final_en, final_grad: int, Union[Psi4.core.Matrix, Psi4.core.Vector]
+
+        """
+
+        gradients = []
+        ref_energies = []
+
+        for grad_obj, restart in xtpl_gradients:
+
+            grad = self.run_gradient(iteration, restart_iteration, xtpl_reap=restart,
+                                     grad_obj=grad_obj)
 
             gradients.append(grad)
             ref_energies.append(grad_obj.get_reference_energy())
@@ -207,49 +254,51 @@ class Optimization(Calculation):
         and prevent steps > restart_iteration are not immediately submitted.  
 
         """
-        
+
         dir_test = f'{self.path}/STEP{restart_iteration:0>2d}'
-        
-        # if only the high_corr exists when restarting and xtpl_reap was not specified,
+        if xtpl_restart:
+            dir_test = f'{dir_test}/low_corr'
+
+        # if only the high_corr exists when restarting and xtpl_restart was not specified,
         # the high_corr jobs will be rurun and a copy of all steps will be made.
 
-        if os.path.exists(dir_test) or (xtpl_restart and os.path.exists(f'{dir_test}/low_corr')):
+        if os.path.exists(dir_test):
 
-                itr = 0
-                # determine the number of directories of the form STEPXX exist. What number to
-                # start at. itr will exit loop as STEP(Max+1).
-                while os.path.exists(f'{self.path}/STEP{itr:>02d}'):
-                    itr += 1
+            itr = 0
+            # determine the number of directories of the form STEPXX exist. What number to
+            # start at. itr will exit loop as STEP(Max+1).
+            while os.path.exists(f'{self.path}/STEP{itr:>02d}'):
+                itr += 1
 
-                restart_itr = 1
-                while os.path.exists(f'{self.path}/{restart_itr}_opt'):
-                    restart_itr += 1
-                restart_itr -= 1  # counts too high
+            restart_itr = 1
+            while os.path.exists(f'{self.path}/{restart_itr}_opt'):
+                restart_itr += 1
+            restart_itr -= 1  # counts too high
 
-                # Move highest indexed group up. Delete. move previous up to replace delete.
-                # Delete STEP0X for X >= restart index
+            # Move highest indexed group up. Delete. move previous up to replace delete.
+            # Delete STEP0X for X >= restart index
 
-                if restart_itr:
-                    for index in range(restart_itr, 0, -1):  # stop before 0.
-                        shutil.copytree(f'{index}_opt',
-                                        f'{index + 1}_opt')
-                        # copy tree must be able to perform a mkdir for python <= 3.8
-                        shutil.rmtree(f'{index}_opt')
+            if restart_itr:
+                for index in range(restart_itr, 0, -1):  # stop before 0.
+                    shutil.copytree(f'{index}_opt',
+                                    f'{index + 1}_opt')
+                    # copy tree must be able to perform a mkdir for python <= 3.8
+                    shutil.rmtree(f'{index}_opt')
 
-                for step_idx in range(itr):
-                    shutil.copytree(f'{self.path}/STEP{step_idx:>02d}', 
-                                    f'{self.path}/1_opt/STEP{step_idx:>02d}')
+            for step_idx in range(itr):
+                shutil.copytree(f'{self.path}/STEP{step_idx:>02d}',
+                                f'{self.path}/1_opt/STEP{step_idx:>02d}')
 
-                    # Keep STEP(restart) if xtpl_restart. Otherwise remove all >= restart_iteration
-                    if step_idx >= restart_iteration:
-                        if step_idx == restart_iteration and xtpl_restart:
-                            pass
-                        else:
-                            shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')
+                # Keep STEP(restart) if xtpl_restart. Otherwise remove all >= restart_iteration
+                if step_idx >= restart_iteration:
+                    if step_idx == restart_iteration and xtpl_restart:
+                        shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}/low_corr')
+                    else:
+                        shutil.rmtree(f'{self.path}/STEP{step_idx:>02d}')
 
-                shutil.copyfile(f'{self.path}/output.dat', f'{self.path}/1_opt/output.dat')
-                with open(f'{self.path}/output.dat', 'w+'):
-                    pass  # clear file
+            shutil.copyfile(f'{self.path}/output.dat', f'{self.path}/1_opt/output.dat')
+            with open(f'{self.path}/output.dat', 'w+'):
+                pass  # clear file
 
     def enforce_unique_paths(self, grad_obj):
         """ Ensure that for an optimization no two gradients can be run in the same directory. Keep
@@ -278,3 +327,4 @@ class Optimization(Calculation):
                              "This can cause failure in FindifCalc's collect_failures() method")
         else:
             self.paths.append(grad_obj.path)
+

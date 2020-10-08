@@ -269,13 +269,15 @@ class FiniteDifferenceCalc(Calculation):
 
 class Gradient(FiniteDifferenceCalc):
 
-    def __init__(self, options, input_obj, molecule, path):
-        super().__init__(options, input_obj, molecule, path)
+    def __init__(self, molecule, input_obj, options, path):
+        super().__init__(molecule, input_obj, options, path)
         
-        psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         if self.options.point_group is not None:
-            psi4_mol_obj.reset_point_group(self.options.point_group)
-        self.findifrec = psi4.driver_findif.gradient_from_energy_geometries(psi4_mol_obj)
+            self.psi4_mol_obj.reset_point_group(self.options.point_group)
+
+        create_grad = Gradient.get_psi4_method()[0]
+        self.findifrec = create_grad(self.psi4_mol_obj)
         self.make_singlepoints()
 
     def run(self):
@@ -305,9 +307,20 @@ class Gradient(FiniteDifferenceCalc):
                     self.findifrec['displacements'][key]['energy'] = self.energies[idx]
 
         # psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
-        grad = psi4.driver_findif.compute_gradient_from_energies(self.findifrec)
+        compute_grad = Gradient.get_psi4_method()[1]
+        grad = compute_grad(self.findifrec)
         self.result = psi4.core.Matrix.from_array(grad)
         return self.result
+
+    @staticmethod
+    def get_psi4_method():
+        if '1.4' in psi4.__version__:
+            create = psi4.driver_findif.gradient_from_energies_geometries
+            compute = psi4.driver_findif.assemble_gradient_from_energies
+        else:
+            create = psi4.driver_findif.gradient_from_energy_geometries
+            compute = psi4.driver_findif.compute_gradient_from_energies
+        return create, compute
 
 
 class Hessian(FiniteDifferenceCalc):
@@ -316,7 +329,8 @@ class Hessian(FiniteDifferenceCalc):
         super().__init__(molecule, input_obj, options, path)
     
         self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
-        self.findifrec = psi4.driver_findif.hessian_from_energy_geometries(self.psi4_mol_obj, -1)
+        make_hess = Hessian.get_psi4_method()[0]
+        self.findifrec = make_hess(self.psi4_mol_obj, -1)
         self.make_singlepoints()
 
     def run(self):
@@ -328,7 +342,8 @@ class Hessian(FiniteDifferenceCalc):
 
         super().reap(force_resub)
 
-        hess = psi4.driver_findif.compute_hessian_from_energies(self.findifrec, -1) 
+        compute_hess = Hessian.get_psi4_method()[1]
+        hess = compute_hess(self.findifrec, -1)
         self.result = psi4.core.Matrix.from_array(hess)
         # Could we get the global_option basis? Yes.
         # Would we need to set it, just for this? Yes.
@@ -396,3 +411,13 @@ class Hessian(FiniteDifferenceCalc):
         psi4.driver._hessian_write(wfn)
 
         return final_hess
+
+    @staticmethod
+    def get_psi4_method():
+        if '1.4' in psi4.__version__:
+            create = psi4.driver_findif.hessian_from_energies_geometries
+            compute = psi4.driver_findif.assemble_hessian_from_energies
+        else:
+            create = psi4.driver_findif.hessian_from_energy_geometries
+            compute = psi4.driver_findif.compute_hessian_from_energies
+        return create, compute

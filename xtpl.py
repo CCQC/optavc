@@ -65,10 +65,11 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, path="./HESS", i
         if index == 0:
             options.correction_regexes = [xtpl_options.xtpl_corrections]
         options.energy_regex = energy_regex
-        
+
         if job_type.upper() == 'GRADIENT':
             options.name = f"{xtpl_options.name}--{iteration:>02d}"
-            step_path = f"STEP{iteration:>02d}/{path_additions[corl_index]}"
+            step_path = f"{path}/STEP{iteration:>02d}/{path_additions[corl_index]}"
+            print(step_path)
             grad_obj = Gradient(molecule, inp_file_obj, options, step_path)
             derivative_calcs.append(grad_obj)
         elif job_type.upper() == "HESSIAN":

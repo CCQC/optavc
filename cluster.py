@@ -11,7 +11,7 @@ import os
 
 
 class Cluster:
-    """ To add a new cluster must add the following strings to cluster_attributes
+    """ To add a new cluster one must add the following strings to cluster_attributes
 
         add a submission command for a submission sciprt.
 
@@ -49,14 +49,14 @@ class Cluster:
                                  'job_state': r'\s*job_state\s=\sC',
                                  'job_name': r'\s*Job_Name\s=\s*.*(\-+\d*)?\-(\d*)',
                                  'job_id': r'(\d*)\.sapelo2',
-                                 'resub_delay': lambda sleep: max(40, sleep)},
+                                 'resub_delay': lambda sleep: max(60, sleep)},
                       'SAP2TEST': {'submit': 'sbatch',
                                    'queue_info': ['sacct', '-X', '--format=JobID,JobName%60,STATE',
                                                   '-j', None],
                                    'job_state': None,
                                    'job_name': r'\s.+(--\d*)?-(\d+)',
                                    'job_id': r'\.*(\d+)',
-                                   'resub_delay': lambda sleep: max(40, sleep)}}
+                                   'resub_delay': lambda sleep: max(60, sleep)}}
 
         return attributes.get(cluster_name)
 

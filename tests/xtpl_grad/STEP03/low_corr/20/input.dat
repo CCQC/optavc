@@ -1,0 +1,36 @@
+set memory 40Gb
+
+molecule {
+    C   -1.174143750690   -0.774963495581   -0.000122054786
+    H   -1.619161817890   -1.211058947381   -0.891063737386
+    H   -1.619236641990   -1.211251475481    0.890686519114
+    C   -1.174932290585    0.774899917772    0.000039302647
+    H   -1.619177205710    1.210967079305    0.890946487017
+    H   -1.619132193220    1.211156156308   -0.890797840783
+    C    0.353049756237    0.922269779828    0.000099395808
+    H    0.839052397153    1.892335002987    0.000209358772
+    O    0.767531608648    0.000115224486   -1.027348507260
+    C    0.353036077103   -0.922233903735   -0.000074620015
+    H    0.839029874680   -1.892302711198   -0.000156512105
+    O    0.767459859956   -0.000084681772    1.027403075640
+}
+
+set {
+    e_convergence 10
+    d_convergence 10
+    freeze_core True
+    basis_guess True
+    cc_type conv
+    maxiter 300
+}
+
+E = energy('mp2/heavy-aug-cc-pV(Q+d)Z')
+psi4.print_out("\n========================OPTAVC-XTPL==========================\n\n")
+psi4.print_out("MP2/QZ correlation energy {}\n".format(variable("MP2 CORRELATION ENERGY")))
+psi4.print_out("SCF/QZ reference energy {}\n".format(variable("CURRENT REFERENCE ENERGY")))
+psi4.print_out("\n\n=============================================================\n")
+
+E = energy('mp2/heavy-aug-cc-pV(T+d)Z')
+psi4.print_out("\n========================OPTAVC-XTPL==========================\n\n")
+psi4.print_out("MP2/TZ correlation energy {}".format(variable("MP2 CORRELATION ENERGY")))
+psi4.print_out("\n\n=============================================================\n")

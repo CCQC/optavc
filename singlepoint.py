@@ -130,14 +130,15 @@ class SinglePoint(Calculation):
         output_path = os.path.join(self.path, self.options.output_name)
 
         try:
-            output_text = open(output_path).read()
+            with open(output_path) as f:
+                output_text = f.read()
         except FileNotFoundError:
             if not self.options.resub:
                 print(f"Could not open output file for singlepoint: {self.disp_num}")
                 print(f"Tried to open {output_path}")
             raise
         else:
-            check = re.search(status_str, output_text)
+            check = re.search(r'^' + status_str, output_text, re.MULTILINE)
 
             if return_text:
                 return check, output_text
@@ -204,4 +205,3 @@ class SinglePoint(Calculation):
         output_text += 'Giraffe'
         with open(output_path, 'w') as file:
             file.writelines(output_text)
-
