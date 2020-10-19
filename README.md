@@ -24,3 +24,7 @@ thousands of singlepoints.
 
 For members of the CCQC, if modifying please make sure to test on all currently used clusters
 Sapelo, Vulcan etc... The test suite will detect which cluster you are currently using.
+
+
+## Recent changes to note for users
+In order to speed up restarting large calculations, regexes for fetching energies are used in multiline mode. i.e. Your regex must be set up to match an entire line. Capture groups are still used to isolate the energy.
