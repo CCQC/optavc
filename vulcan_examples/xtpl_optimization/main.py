@@ -41,6 +41,6 @@ options_kwargs = {
 }
 
 # As usual restart_iteration means we should being sowing gradients at STEP5
-# xtpl_restart here indicates that we should skip high_corr
+# xtpl_reap here indicates that we should skip high_corr
 
 optavc.run_optavc("OPT", options_kwargs, restart_iteration=5, xtpl_restart=True)

@@ -2,7 +2,6 @@ import psi4
 import os
 from typing import Union
 
-
 # from .dask_iface import connect_Client
 
 
@@ -13,9 +12,9 @@ class Options(object):
         self.energy_regex = kwargs.pop("energy_regex", "")
         self.success_regex = kwargs.pop("success_regex", "")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
+        self.program = kwargs.pop("program", "")
         self.fail_regex = kwargs.pop("fail_regex", "")
         self.time_limit = kwargs.pop("time_limit", None)
-        self.program = kwargs.pop("program", "")
         self.input_name = kwargs.pop("input_name", "input.dat")
         self.files_to_copy = kwargs.pop("files_to_copy", [])
         self.output_name = kwargs.pop("output_name", "output.dat")
@@ -23,18 +22,18 @@ class Options(object):
         self.point_group = kwargs.pop("point_group", None)
         self.maxiter = kwargs.pop("maxiter", 20)
         self.mpi = kwargs.pop("mpi", None)
+        self.cluster = kwargs.pop("cluster", "VULCAN").upper()
         self.job_array = kwargs.pop("job_array", False)
         self.queue = kwargs.pop("queue", "")
         self.nslots = kwargs.pop("nslots", 4)
-        self.job_array_range = kwargs.pop("job_array", False)  # needs to be set by calling function
         self.email = kwargs.pop("email", None)
-        self.email_opts = kwargs.pop("email_opts", 'ae')
+        self.email_opts = kwargs.pop("email_opts", '')
         self.memory = kwargs.pop("memory", "")
-        self.cluster = kwargs.pop("cluster", "").upper()
         self.name = kwargs.pop("name", "STEP")
-        self.resub = kwargs.pop("resub",False)
-        self.resub_test = kwargs.pop("resub_test",False)
+        self.resub = kwargs.pop("resub", False)
+        self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
+        self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
         self.xtpl_programs = kwargs.pop("xtpl_programs", None)
@@ -44,6 +43,8 @@ class Options(object):
         self.xtpl_corrections = kwargs.pop("xtpl_corrections", None)
         self.xtpl_wait_times = kwargs.pop("xtpl_wait_times", None)
         self.xtpl_input_style = kwargs.pop("xtpl_input_style", None)
+        self.resub_max = kwargs.pop("resub_max", 1)
+        self.job_array_range = kwargs.pop("job_array", False)  # needs to be set by calling function
 
         if self.mpi is not None:
             # from .mpi4py import compute
@@ -51,6 +52,14 @@ class Options(object):
             self.command = kwargs.pop("command")
             # self.submitter = compute
         initialize_psi_options(kwargs)
+
+    @property
+    def program(self):
+        return self._program
+    
+    @program.setter
+    def program(self, val=""):
+        self._program = val
 
     @property
     def wait_time(self):
@@ -182,6 +191,35 @@ class Options(object):
             raise ValueError("""Optavc has no default for xtpl_input_style. 
                              Must be either [2, 2], [1, 3]""")
         self._xtpl_input_style = vals
+
+    @property
+    def fail_regex(self):
+        return self._fail_regex    
+
+    @fail_regex.setter
+    def fail_regex(self, val=None):
+        if val:
+            self._fail_regex = val
+        else:
+            if 'molpro' in self.program:
+                self.fail_regex = r'GLOBAL\sERROR\sfehler'
+            elif 'psi4' in self.program:
+                self.fail_regex = r'coffee'
+            elif 'cfour' in self.program:
+                self.fail_regex = r'(ERROR\s*)*'
+
+    @property
+    def job_array(self):
+        return self._job_array
+
+    @job_array.setter
+    def job_array(self, val):
+        if self.cluster.upper() == 'VULCAN':
+            self._job_array = val
+        else:
+            # ensure that job_array is False for SAPELO, SAP2TEST etc
+            self._job_array = False
+
 
 def initialize_psi_options(kwargs):
     for key, value in kwargs.items():

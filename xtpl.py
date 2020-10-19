@@ -6,25 +6,33 @@ from .gradient import Gradient
 from .hessian import Hessian
 
 
-def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
+
+def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, path="./HESS", iteration=0):
     """ Create a series of Hessian or Gradient objects for use the extrpolation procedure 
-    
+
     Parameters
     ----------
     job_type: str
     molecule: TemplateFileProcessor.molecule
+    xtpl_inputs : list[InputFileObj]
+        input file class instances for the two calculations needed for xtpl procedure
     xtpl_options: Options
         xtpl_ prefix indicates that this is used to set the 'standard' options from the
         corresponding xtpl_* options here in the creation of a Gradient or Hessian
+    path: str, optional
+        can be used to redirect Hessian displacements from HESS/*_corr to path/*_corr
+    iteration : int
+        used to create grad_obj with correct path and name in xtpl procedure
 
     Returns
     -------
     lsit[object]
     """
 
+    # TODO ideally this file would be removed and placed in finddifcalc.
+
     path_additions = ["high_corr", "low_corr"]
     derivative_calcs = []
-
 
     xtpl_regs = xtpl_options.xtpl_energy
     if xtpl_options.xtpl_input_style == [2, 2]:
@@ -59,17 +67,16 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, iteration=0):
         if index == 0:
             options.correction_regexes = [xtpl_options.xtpl_corrections]
         options.energy_regex = energy_regex
-        
-        if options.cluster == "SAPELO":
-            options.wait_time = xtpl_options.xtpl_wait_times[corl_index]
 
         if job_type.upper() == 'GRADIENT':
-            step_path = f"STEP{iteration:>02d}/{path_additions[corl_index]}"
+            options.name = f"{xtpl_options.name}--{iteration:>02d}"
+            step_path = f"{path}/STEP{iteration:>02d}/{path_additions[corl_index]}"
+            print(step_path)
             grad_obj = Gradient(molecule, inp_file_obj, options, step_path)
             derivative_calcs.append(grad_obj)
         elif job_type.upper() == "HESSIAN":
-            path = f"./XTPL/{path_additions[corl_index]}"
-            hess_obj = Hessian(options, inp_file_obj, molecule, path)
+            hess_path = f"{path}/{path_additions[corl_index]}"
+            hess_obj = Hessian(molecule, inp_file_obj, options, hess_path)
             derivative_calcs.append(hess_obj)
 
     return derivative_calcs
@@ -86,6 +93,7 @@ def energy_correction(basis_sets, deriv, ref_energies):
     final_hess = Matrix.from_array(low_cbs_hess.np + deriv[0].np - deriv[3].np + deriv[4].np)
     final_en = low_cbs_e + ref_energies[0] - ref_energies[3] + ref_energies[4]
     return final_en, final_hess, low_cbs_e
+
 
 def order_high_low(deriv, energies, input_style):
     """ Different orders for input_styles unify back to 

@@ -15,3 +15,12 @@ import optavc.<module name>
 ```
 
 This version works with latest Psi4 with findif overhaul -jdw 8-31-18
+
+Optavc is designed to run on slurm, pbs_torque, and sge clusters. Due to software issues encountered
+by the CCQC singlepoints can be resubmitted if the job fails for any reason. This makes optavc a
+rather dangerous tool. When making modifications to optavc watch the pytest suite closely to
+ensure that changes have not affected the resubmission code. An error could submit hundreds to
+thousands of singlepoints. 
+
+For members of the CCQC, if modifying please make sure to test on all currently used clusters
+Sapelo, Vulcan etc... The test suite will detect which cluster you are currently using.
