@@ -364,7 +364,8 @@ echo "PBS_JOBID is $PBS_JOBID"
 
 {mod_load}
 export NSLOTS={nslots}
-time {cline}"""]
+time {cline}
+# ignored newline - do not remove"""]
 
 pbs_email = """#PBS -M {email}
 #PBS -m {email_opts}"""
@@ -383,7 +384,8 @@ export NSLOTS={nslots}
 
 {mod_load}
 
-time {cline}"""]
+time {cline}
+# ignored newline -- do not remove"""]
 
 slurm_email = ["""#SBATCH --mail-user={email}
 #SBATCH --mail-type={email_opts}"""]
