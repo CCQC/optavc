@@ -1,7 +1,5 @@
 import random
-
 import pytest
-
 from optavc.cluster import Cluster
 
 def sge_queries(names, completed):
@@ -50,6 +48,7 @@ def slurm_queries(names, completed):
                                                      ("HESS", 4, [3, 2]), 
                                                      ('HESS', 1036, [1032]), 
                                                      ('ijfffads_fjfjaa-99', 4, [3])])
+@pytest.mark.no_calc
 def test_job_query(cluster, name, number, completed):
     
 
@@ -87,6 +86,7 @@ def test_job_query(cluster, name, number, completed):
 @pytest.mark.parametrize("cluster", ["VULCAN", "SAPELO", "SAP2TEST"])
 @pytest.mark.parametrize("job_id", [random.randint(1000000, 9999999) for i in range(5)])
 @pytest.mark.parametrize("job_name", ["STEP--00-1", "STEP--01", "HESS", "stupidly_long_molecule-name_-with_extra-949"])
+@pytest.mark.no_calc
 def test_job_id(cluster, job_id, job_name):
 
     cluster_obj = Cluster(cluster)

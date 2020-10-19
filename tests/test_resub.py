@@ -20,6 +20,7 @@ grad_xtpl = [[[1, 10, 15, 26, 27], [53, 54, 56, 59]], [[], []], [[], [3, 4, 5, 8
 @pytest.mark.parametrize("options, failures, paths", [(options1, hess, ['hess']), 
                                                       (options2, hess_xtpl, ['xtpl_hess/high_corr', 
                                                                              'xtpl_hess/low_corr'])])
+@pytest.mark.no_calc
 def test_hessian_failures(options, failures, paths):
     # the actual molecule doesn't really matter as long as it has the right number
     # of displacements
@@ -54,6 +55,7 @@ def test_hessian_failures(options, failures, paths):
 
 
 @pytest.mark.parametrize("options, failures", [(options1, grad), (options2, grad_xtpl)])
+@pytest.mark.no_calc
 def test_gradient_failures(options, failures):
    
     options.update({'xtpl_energy': [r"\s*CCSD\s*correlation\s*energy\s+(-?\d+\.\d+)",

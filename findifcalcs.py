@@ -9,7 +9,7 @@ from .singlepoint import Calculation, SinglePoint
 
 
 class FiniteDifferenceCalc(Calculation):
-    f""" A Calculation consisting of a series of Singlepoints with needed machinery to submit,
+    """ A Calculation consisting of a series of Singlepoints with needed machinery to submit,
     collect and assemble these Singlepoints.
     
     Attributes

@@ -1,11 +1,12 @@
 import os
+import pytest
 
 from optavc.findifcalcs import Gradient
 from optavc.optimize import Optimization
 
 from optavc.tests import utils
 
-
+@pytest.mark.no_calc
 def test_gradient_creation():
 
     options_1, options_2 = utils.options_4_cluster("calc_1")
@@ -73,8 +74,4 @@ def test_complex_molecule():
     molecule, template, options_obj = utils.create_needed_objects(basic_options)
     grad_obj = Gradient(molecule, template, options_obj, path='.')
     assert len(grad_obj.singlepoints) == 247
-
-
-
-
 

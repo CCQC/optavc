@@ -47,8 +47,6 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
 
     options_obj = Options(**options_dict)
 
-    # Make all required input_file objects required. xtpl job should only require 2
-
     if options_obj.xtpl:
         tfps = [TemplateFileProcessor(open(i).read(), options_obj) for i in
                 options_obj.xtpl_templates]
