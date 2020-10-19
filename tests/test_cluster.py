@@ -1,7 +1,5 @@
 import random
-
 import pytest
-
 from optavc.cluster import Cluster
 
 def sge_queries(names, completed):

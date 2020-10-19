@@ -31,7 +31,8 @@ def two_or_more(string):
 lsp_endline = zero_or_more(whitespace) + endline
 lsp_word = zero_or_more(whitespace) + two_or_more(character)
 lsp_signed_double = zero_or_more(whitespace) + signed_double
-lsp_atomic_symbol = zero_or_more(whitespace) + character + maybe(character)
+lsp_atomic_symbol = zero_or_more(whitespace) + character + maybe(character) + \
+                    maybe(unsigned_integer)
 
 
 class BagelRegex:

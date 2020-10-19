@@ -327,3 +327,4 @@ class Optimization(Calculation):
                              "This can cause failure in FindifCalc's collect_failures() method")
         else:
             self.paths.append(grad_obj.path)
+

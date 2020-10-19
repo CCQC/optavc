@@ -2,10 +2,7 @@ import copy
 from psi4.core import Matrix
 from psi4.driver.driver_cbs import corl_xtpl_helgaker_2
 
-from .gradient import Gradient
-from .hessian import Hessian
-
-
+from .findifcalcs import Gradient, Hessian
 
 def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, path="./HESS", iteration=0):
     """ Create a series of Hessian or Gradient objects for use the extrpolation procedure 

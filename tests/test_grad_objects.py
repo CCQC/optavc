@@ -50,6 +50,28 @@ def test_gradient_creation():
                                                         f'{singlepoint.disp_num}')
 
 
+def test_complex_molecule():
 
+    basic_options = {
+        'template_file_path': "mixed_basis.dat",
+        'input_name': "input.dat",
+        'output_name': "output.dat",
+        'program': 'psi4',
+        'energy_regex': r"\s*\*\s*CCSD\(T\)\stotal\senergy\s+=\s*(-\d*.\d*)",
+        'maxiter': 100,
+        'cluster': 'Vulcan',
+        'name': 'test',
+        'nslots': 4,
+        'print': 3,
+        'resub': True,
+        'max_force_g_convergence': 1e-7,
+        'ensure_bt_convergence': True,
+        'hessian_write': True,
+        'xtpl': False,
+        'sleepy_sleep_time': 10
+    }
 
+    molecule, template, options_obj = utils.create_needed_objects(basic_options)
+    grad_obj = Gradient(molecule, template, options_obj, path='.')
+    assert len(grad_obj.singlepoints) == 247
 

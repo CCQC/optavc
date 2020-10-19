@@ -13,12 +13,8 @@ run_optavc_mpi()
 
 from optavc.options import Options
 from . import optimize
-<<<<<<< HEAD
-from . import hessian
-=======
 from . import findifcalcs
 from . import xtpl
->>>>>>> 33348a41032a6bf234e8092f8f67d7186fe5e2fa
 from .template import TemplateFileProcessor
 
 

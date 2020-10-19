@@ -67,8 +67,3 @@ def test_dir_backup(xtpl, xtpl_restart, low_corr_exists, restart_at, iterations_
             assert os.path.exists(f'./1_opt/{step}')
         assert not os.path.exists(f'./1_opt/{restart_at}')
 
-
-
-
-
-
