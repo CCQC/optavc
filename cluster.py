@@ -410,5 +410,5 @@ sapelo_load_old = {
 
 sapelo_load = {
     "molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin",
-    "psi4": "module load Anaconda3/5.0.1\nsource activate psi_1_3_2"
+    "psi4": "module load PSI4/1.3.2_conda"
 }
