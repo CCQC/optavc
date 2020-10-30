@@ -44,13 +44,13 @@ class Cluster:
                                  'job_name': r'jobname\s+.*(--\d*)?-(\d*)',
                                  'job_id': r'Your\s*job\s*(\d*)',
                                  'resub_delay': lambda sleep: max(10, sleep)},
-                      'SAPELO': {'submit': 'qsub',
-                                 'queue_info': ['qstat', '-f', None],
-                                 'job_state': r'\s*job_state\s=\sC',
-                                 'job_name': r'\s*Job_Name\s=\s*.*(\-+\d*)?\-(\d*)',
-                                 'job_id': r'(\d*)\.sapelo2',
-                                 'resub_delay': lambda sleep: max(60, sleep)},
-                      'SAP2TEST': {'submit': 'sbatch',
+                      'SAPELO_OLD': {'submit': 'qsub',
+                                     'queue_info': ['qstat', '-f', None],
+                                     'job_state': r'\s*job_state\s=\sC',
+                                     'job_name': r'\s*Job_Name\s=\s*.*(\-+\d*)?\-(\d*)',
+                                     'job_id': r'(\d*)\.sapelo2',
+                                     'resub_delay': lambda sleep: max(60, sleep)},
+                      'SAPELO': {'submit': 'sbatch',
                                    'queue_info': ['sacct', '-X', '--format=JobID,JobName%60,STATE',
                                                   '-j', None],
                                    'job_state': None,
@@ -67,7 +67,7 @@ class Cluster:
 
         out = self.make_sub_script(options)
 
-        if len(options.name) > 60 and self.cluster_name == 'SAP2TEST':
+        if len(options.name) > 60 and self.cluster_name == 'SAPELO':
             raise ValueError(f"Your Job's Name is too long please shorten by "
                              f"{len(options) - 60} characters or increase formatting space in "
                              f"`cluster_attributes()` for SAP2TEST")
@@ -211,7 +211,7 @@ class Cluster:
             if self.cluster_name == 'VULCAN':
                 if output:
                     job_state = True
-            elif self.cluster_name == 'SAP2TEST':
+            elif self.cluster_name == 'SAPELO':
                 # simple check for substring in output
                 if not ("PENDING" in output or "RUNNING" in output):
                     job_state = True
@@ -236,11 +236,11 @@ class Cluster:
                 return sge_array_template
             else:
                 return sge_template
-        elif self.cluster_name == "SAPELO":
+        elif self.cluster_name == "SAPELO_OLD":
             if email:
                 return pbs_email_template
             return pbs_template
-        elif self.cluster_name == "SAP2TEST":
+        elif self.cluster_name == "SAPELO":
             if email:
                 return slurm_email_template
             return slurm_template
@@ -272,20 +272,20 @@ class Cluster:
             'name': options.name
         }
 
-        if self.cluster_name in ['SAPELO', "SAP2TEST"]:
+        if self.cluster_name in ['SAPELO', "SAPELO_OLD"]:
 
-            odict.update({'mod_load': sapelo_load.get(progname),
-                          'memory': options.memory,
-                          'time': options.time_limit
-                          })
+            odict.update({'memory': options.memory,
+                          'time': options.time_limit})
 
             if options.email:
                 odict.update({
                     'email': options.email,
                     'email_opts': options.email_opts})
 
-            if self.cluster_name == 'SAP2TEST':
-                odict.update({'mod_load': sap2test_load.get(progname)})
+            if self.cluster_name == 'SAPELO':
+                odict.update({'mod_load': sapelo_load.get(progname)})
+            else:
+                odict.update({'mod_load': sapelo_load_old.get(progname)})
 
         elif self.cluster_name == 'VULCAN':
 
@@ -403,12 +403,12 @@ vulcan_load = {
     "psi4": "psi4@master"
 }
 
-sapelo_load = {
+sapelo_load_old = {
     "molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin/",
     "psi4": "module load PSI4/1.3.2_conda"
 }
 
-sap2test_load = {
+sapelo_load = {
     "molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin",
     "psi4": "module load Anaconda3/5.0.1\nsource activate psi_1_3_2"
 }
