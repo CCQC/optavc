@@ -23,7 +23,7 @@ def test_gradient_creation():
         assert grad_obj.path == os.path.realpath(f'STEP{iteration:02d}')
         assert grad_obj.options.name == f'test--{iteration:02d}'
 
-        for singlepoint in grad_obj.singlepoints:
+        for singlepoint in grad_obj.calculations:
             assert singlepoint.path == os.path.realpath(f'./STEP{iteration:02d}/'
                                                         f'{singlepoint.disp_num}')
             assert singlepoint.options.name == (f'test--{iteration:02d}-'
@@ -36,14 +36,14 @@ def test_gradient_creation():
             assert xtpl_grad_obj.options.name == f'test--{iteration:02d}'
             if index in [0, 1]:
                 assert xtpl_grad_obj.path == os.path.realpath(f'STEP{iteration:02d}/high_corr')
-                for singlepoint in xtpl_grad_obj.singlepoints:
+                for singlepoint in xtpl_grad_obj.calculations:
                     assert singlepoint.path == os.path.realpath(f'STEP{iteration:02d}/high_corr/'
                                                                 f'{singlepoint.disp_num}')
                     assert singlepoint.options.name == (f'test--{iteration:02d}-'
                                                         f'{singlepoint.disp_num}')
             else:
                 assert xtpl_grad_obj.path == os.path.realpath(f'STEP{iteration:02d}/low_corr')
-                for singlepoint in xtpl_grad_obj.singlepoints:
+                for singlepoint in xtpl_grad_obj.calculations:
                     assert singlepoint.path == os.path.realpath(f'STEP{iteration:02d}/low_corr/'
                                                                 f'{singlepoint.disp_num}')
                     assert singlepoint.options.name == (f'test--{iteration:02d}-'
@@ -73,5 +73,5 @@ def test_complex_molecule():
 
     molecule, template, options_obj = utils.create_needed_objects(basic_options)
     grad_obj = Gradient(molecule, template, options_obj, path='.')
-    assert len(grad_obj.singlepoints) == 247
+    assert len(grad_obj.calculations) == 247
 

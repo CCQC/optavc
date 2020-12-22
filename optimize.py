@@ -5,7 +5,7 @@ import copy
 import psi4
 
 from .molecule import Molecule
-from .singlepoint import Calculation
+from .calculations import Calculation, AnalyticGradient
 from .findifcalcs import Gradient
 from .xtpl import xtpl_wrapper, energy_correction, order_high_low
 
@@ -147,7 +147,11 @@ class Optimization(Calculation):
         options = copy.deepcopy(self.options)
         options.name = f"{self.options.name}--{iteration:02d}"
         step_path = f"STEP{iteration:>02d}"
-        return Gradient(self.molecule, self.inp_file_obj, options, step_path)
+ 
+        if self.options.dertype == 'ENERGY':
+            return Gradient(self.molecule, self.inp_file_obj, options, path=step_path)
+        else:  # DERTYPE == 'GRADIENT'
+            return AnalyticGradient(self.molecule, self.inp_file_obj, options, path=step_path)
 
     def create_xtpl_gradients(self, iteration, restart_iteration, user_xtpl_restart=None):
         """ Uses xtpl_wrapper to create each gradient object needed in the xtpl procedure

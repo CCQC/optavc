@@ -23,7 +23,7 @@ def pbs_queries(names, completed):
         else:
             state = random.choice(("R", "Q"))    
 
-        yield sapelo.format(name=name, state=state)
+        yield sapelo_old.format(name=name, state=state)
 
 
 def slurm_queries(names, completed):
@@ -36,9 +36,9 @@ def slurm_queries(names, completed):
             state = random.choice(("PENDING", "RUNNING"))
             print(state)
 
-        yield sap2test.format(name=name, state=state)
+        yield sapelo.format(name=name, state=state)
 
-@pytest.mark.parametrize("cluster", ["VULCAN", "SAPELO", "SAP2TEST"])
+@pytest.mark.parametrize("cluster", ["VULCAN", "SAPELO", "SAPELO_OLD"])
 @pytest.mark.parametrize("name, number, completed", [('STEP--00', 8, [8, 2]), 
                                                      ('STEP--01', 8, [6, 7]), 
                                                      ('STEP--10', 3, [1]), 
@@ -54,7 +54,7 @@ def test_job_query(cluster, name, number, completed):
 
     cluster_obj = Cluster(cluster)
 
-    query_methods = {'VULCAN': sge_queries, 'SAPELO': pbs_queries, 'SAP2TEST': slurm_queries}
+    query_methods = {'VULCAN': sge_queries, 'SAPELO_OLD': pbs_queries, 'SAPELO': slurm_queries}
     query_method = query_methods.get(cluster)
     names = [{'name': f"{name}-{id}"} for id in range(1, number + 1)]
 
@@ -83,14 +83,14 @@ def test_job_query(cluster, name, number, completed):
                     raise ValueError 
 
 
-@pytest.mark.parametrize("cluster", ["VULCAN", "SAPELO", "SAP2TEST"])
+@pytest.mark.parametrize("cluster", ["VULCAN", "SAPELO", "SAPELO_OLD"])
 @pytest.mark.parametrize("job_id", [random.randint(1000000, 9999999) for i in range(5)])
 @pytest.mark.parametrize("job_name", ["STEP--00-1", "STEP--01", "HESS", "stupidly_long_molecule-name_-with_extra-949"])
 @pytest.mark.no_calc
 def test_job_id(cluster, job_id, job_name):
 
     cluster_obj = Cluster(cluster)
-    id_strings = {"VULCAN": sge_submit, "SAPELO": pbs_submit, "SAP2TEST": slurm_submit}
+    id_strings = {"VULCAN": sge_submit, "SAPELO_OLD": pbs_submit, "SAPELO": slurm_submit}
     id_string = id_strings.get(cluster)
     
     if cluster == "VULCAN":
@@ -100,7 +100,7 @@ def test_job_id(cluster, job_id, job_name):
 
     assert int(cluster_obj.get_job_id(id_output)) == job_id
 
-sapelo = """
+sapelo_old = """
     Job_Name = {name}
     Job_Owner = agh66737@sapelo2-sub2.ecompute
     resources_used.cput = 00:00:08
@@ -224,7 +224,7 @@ maxvmem      1.573G
 arid         undefined
 """
 
-sap2test = """
+sapelo = """
        JobID                                                      JobName      State 
 ------------        ----------------------------------------------------- ---------- 
 35326               {name}                                                {state}

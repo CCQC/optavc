@@ -22,7 +22,7 @@ class Options(object):
         self.point_group = kwargs.pop("point_group", None)
         self.maxiter = kwargs.pop("maxiter", 20)
         self.mpi = kwargs.pop("mpi", None)
-        self.cluster = kwargs.pop("cluster", "VULCAN").upper()
+        self.cluster = kwargs.pop("cluster", "VULCAN")
         self.job_array = kwargs.pop("job_array", False)
         self.queue = kwargs.pop("queue", "")
         self.nslots = kwargs.pop("nslots", 4)
@@ -34,6 +34,9 @@ class Options(object):
         self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
+        self.gradient_file = kwargs.pop("gradient_file", None)
+        self.gradient_regex = kwargs.pop("gradient_regex", None)
+        self.dertype = kwargs.pop('dertype', None)
         self.xtpl = None  # This will be set by xtpl_setter
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)
         self.xtpl_programs = kwargs.pop("xtpl_programs", None)
@@ -60,6 +63,19 @@ class Options(object):
     @program.setter
     def program(self, val=""):
         self._program = val
+
+
+    @property
+    def cluster(self):
+        return self._cluster
+
+    @cluster.setter
+    def cluster(self, val):
+        if isinstance(val, str):
+            if val.upper() in ['SAPELO', 'SAPELO_OLD', 'VULCAN']:
+                self._cluster = val.upper()
+        elif val is None:
+            self._cluster = 'HOST'
 
     @property
     def wait_time(self):
@@ -219,6 +235,29 @@ class Options(object):
         else:
             # ensure that job_array is False for SAPELO, SAP2TEST etc
             self._job_array = False
+
+    @property
+    def dertype(self):
+        return self._dertype
+
+    @dertype.setter
+    def dertype(self, val):
+
+        dertypes = ['ENERGY', 'GRADIENT']
+
+        if val is None:
+            self._dertype = 'ENERGY'
+        elif isinstance(val, str):
+            print(val.upper())
+            if val.upper() in dertypes:
+                self._dertype = val.upper()
+            else:
+                raise ValueError("Unable to determine type of calculation (dertype)")
+        elif val in [0, 1]:
+            self._dertype = dertypes[val]
+        else:
+            self._dertype = 'ENERGY'
+            raise ValueError("Unable to determine type of calculation (dertype)")
 
 
 def initialize_psi_options(kwargs):
