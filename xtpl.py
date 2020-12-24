@@ -81,6 +81,8 @@ def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, path="./HESS", i
 
 def energy_correction(basis_sets, deriv, ref_energies):
 
+    print(f"deriv 2: {deriv[2]}")
+    print(f"ref_energy 2: {ref_energies[2]}")
     low_cbs_hess = corl_xtpl_helgaker_2("basis set xtpl Hess", basis_sets[1], deriv[2],
                                         basis_sets[0], deriv[1])
     low_cbs_e = corl_xtpl_helgaker_2("basis set xtpl E", basis_sets[1], ref_energies[2],

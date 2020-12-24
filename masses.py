@@ -1,5 +1,11 @@
 def get_mass(label):
-    return atomic_masses[mass_labels.index(label.upper())]
+    if label in mass_labels:
+        return atomic_masses[mass_labels.index(label.upper())]
+    try: 
+        # allow for a single charachter at the end to be used for differentiating
+        return atomic_masses[mass_labels.index(label[:-1].upper())] 
+    except:
+        raise ValueError("Could not understand stomic symbol in template")
 
 
 mass_labels = [

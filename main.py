@@ -103,13 +103,13 @@ def test_singlepoints(jobtype, molecule, options_obj, input_obj, xtpl_inputs=Non
         if opt_obj.options.xtpl:
             for gradient, _ in opt_obj.create_xtpl_gradients(iteration=0, restart_iteration=0,
                                                              user_xtpl_restart=False):
-                ref_singlepoint = gradient.singlepoints[0]
+                ref_singlepoint = gradient.calculations[0]
                 assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
                 assert ref_singlepoint.get_energy()
         else:
             # single gradient reap only
             gradient = opt_obj.create_opt_gradient(iteration=0)
-            ref_singlepoint = gradient.singlepoints[0]
+            ref_singlepoint = gradient.calculations[0]
             assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
             assert ref_singlepoint.get_energy()
 
@@ -119,12 +119,12 @@ def test_singlepoints(jobtype, molecule, options_obj, input_obj, xtpl_inputs=Non
 
         if options_obj.xtpl:
             for hess_obj in xtpl.xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options_obj):
-                ref_singlepoint = hess_obj.singlepoints[0]
+                ref_singlepoint = hess_obj.calculations[0]
                 assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
                 assert ref_singlepoint.get_energy()
         else:
             hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
-            ref_singlepoint = hess_obj.singlepoints[0]
+            ref_singlepoint = hess_obj.calculations[0]
             assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
             assert ref_singlepoint.get_energy()
 
