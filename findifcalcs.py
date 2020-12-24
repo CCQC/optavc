@@ -113,7 +113,6 @@ class FiniteDifferenceCalc(Calculation):
             self.cluster.submit(self.options)
             os.chdir(working_directory)
 
-    @abstractmethod
     def reap(self, force_resub=False):
         """ Once all calculations have finished, collect and place in self.findifrec. Child classes will use 
         self.findifrec to construct the result
@@ -141,8 +140,11 @@ class FiniteDifferenceCalc(Calculation):
         self.build_findif_dict()
 
     def compute_result(self):
+        print(f"compute result called")
         self.sow()
+        print(f"sow has finished")
         self.run()
+        print(f"run has finished preparing to call reap")
         return self.reap()
 
     def resub(self, force_resub=False):
@@ -280,7 +282,7 @@ class Gradient(FiniteDifferenceCalc):
 
     def __init__(self, molecule, input_obj, options, path):
         super().__init__(molecule, input_obj, options, path)
-        
+        print("Creating correct gradient class") 
         self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         if self.options.point_group is not None:
             self.psi4_mol_obj.reset_point_group(self.options.point_group)
@@ -356,9 +358,9 @@ class Gradient(FiniteDifferenceCalc):
     
         for key, result in self.keys_and_results():
             if key == 'reference':
-                self.findifrec['reference']['energy'] = energy
+                self.findifrec['reference']['energy'] = result
             else:
-                self.findifrec['displacements'][key]['energy'] = energy
+                self.findifrec['displacements'][key]['energy'] = result
 
 
 class Hessian(FiniteDifferenceCalc):
@@ -399,7 +401,7 @@ class Hessian(FiniteDifferenceCalc):
         if self.options.dertype.lower() == 'gradient':
             return self.calculations[0].get_energy()
         else:
-            super().get_reference_energy()
+            return super().get_reference_energy()
 
     @staticmethod
     def xtpl_hessian(molecule, xtpl_inputs, options, path="./HESS", sow=True):
@@ -431,7 +433,7 @@ class Hessian(FiniteDifferenceCalc):
 
             hessians.append(hessian)
             ref_energies.append(hess_obj.get_reference_energy())
-
+        
         basis_sets = options.xtpl_basis_sets
         # Same order as in xtpl_grad()
         
@@ -495,9 +497,9 @@ class Hessian(FiniteDifferenceCalc):
     def build_findif_dict(self):
 
         calc_type = self.options.dertype.lower()
-
-        for key, result in self.keys_and_results:
-            
+        print(calc_type)
+        for key, result in self.keys_and_results():
+            print(f"key {key} result {result}")             
             if key == 'reference':
                 self.findifrec['reference'][calc_type] = result
                 if calc_type == 'gradient':

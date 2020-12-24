@@ -83,6 +83,10 @@ class AnalyticCalc(Calculation):
         -------
         str : output captured from qsub *.sh """
 
+        print("Running calculation")
+        print("working_directory")
+        print("self.path")
+
         working_directory = os.getcwd()
         os.chdir(self.path)
 
@@ -109,6 +113,8 @@ class AnalyticCalc(Calculation):
         directory
         """
 
+        print("writing input")
+        print(f"path: self.path")
         if not os.path.exists(self.path):
             os.makedirs(self.path)
         self.molecule.set_units(self.options.input_units)
@@ -284,7 +290,7 @@ class AnalyticGradient(AnalyticCalc):
             regex = self.options.gradient_regex + label_xyz
             grad_str = re.search(regex, output).group()
         
-        return self.str_to_numpy(grad_str)
+        return self.str_to_psi4mat(grad_str)
 
     def get_reference_energy(self):
         """ Get reference energy from gradient calculation """ 
@@ -296,12 +302,18 @@ class AnalyticGradient(AnalyticCalc):
     
         return self._get_energy_float(self.options.energy_regex, output) 
 
-    def str_to_numpy(self, grad_output):
-        # files might be formatted with comment or natom line. Ignore and grab the last natom 
-        # lines
+    def str_to_psi4mat(self, grad_output):
+        """ Take string with possible header from the output file or a specified gradient file
+        and convert to psi4 matrix
+        
+        Notes
+        -----
+        ignores any header grabs the last three columns of the last 'natom' lines and converts to
+        a psi4 matrix via numpy array """
 
         grad_lines = grad_output.split("\n")
-        # drop labels if present
+        # drop labels if present (assumes labels in first whitespace separated column) for
+        # last lines in string. Assumes dE/dx, ... values are the last lines in string
         twoD_grad_str = [line.split()[-3:] for line in grad_lines[-self.molecule.natom:]]
         twoD_grad = np.asarray(twoD_grad_str).astype(float)
-        return Matrix.from_array(twoD_grad) 
+        return Matrix.from_array(twoD_grad)

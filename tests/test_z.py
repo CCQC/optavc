@@ -50,15 +50,14 @@ def test_opt(options):
     at STEP02 try to restart the last step
     """
 
-    # utils.initialize()
+    utils.initialize()
     xtpl = options.pop('xtpl')
 
     try:
-        assert optavc.run_optavc("OPT", options, restart_iteration=0, test_input=True)
+        assert optavc.run_optavc("OPT", options, restart_iteration=0)
 
         remove_outputs(xtpl)
 
-        # rerun optimization starting at iteration 6
         assert optavc.run_optavc("OPT", options, restart_iteration=4)
     finally:
         options.update({'xtpl': xtpl})
