@@ -1,5 +1,6 @@
 import psi4
 import os
+import socket
 from typing import Union
 
 # from .dask_iface import connect_Client
@@ -10,11 +11,15 @@ class Options(object):
 
         self.template_file_path = kwargs.pop("template_file_path", "template.dat")
         self.energy_regex = kwargs.pop("energy_regex", "")
-        self.success_regex = kwargs.pop("success_regex", "")
+        # self.success_regex = kwargs.pop("success_regex", "")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
+        self.nslots = kwargs.pop("nslots", 4)
+        self.threads = kwargs.pop("threads", 1)  # for mixed mpi(nslots)/omp(threads)
+        self.scratch = kwargs.pop('scratch', 'lscratch')
+        self.parallel = kwargs.pop("parallel", "")
         self.program = kwargs.pop("program", "")
-        self.fail_regex = kwargs.pop("fail_regex", "")
-        self.time_limit = kwargs.pop("time_limit", None)
+        # self.fail_regex = kwargs.pop("fail_regex", "")
+        self.time_limit = kwargs.pop("time_limit", "10:00:00")
         self.input_name = kwargs.pop("input_name", "input.dat")
         self.files_to_copy = kwargs.pop("files_to_copy", [])
         self.output_name = kwargs.pop("output_name", "output.dat")
@@ -25,10 +30,9 @@ class Options(object):
         self.cluster = kwargs.pop("cluster", "VULCAN")
         self.job_array = kwargs.pop("job_array", False)
         self.queue = kwargs.pop("queue", "")
-        self.nslots = kwargs.pop("nslots", 4)
         self.email = kwargs.pop("email", None)
-        self.email_opts = kwargs.pop("email_opts", '')
-        self.memory = kwargs.pop("memory", "")
+        self.email_opts = kwargs.pop("email_opts", 'END,FAIL')
+        self.memory = kwargs.pop("memory", "32GB")
         self.name = kwargs.pop("name", "STEP")
         self.resub = kwargs.pop("resub", False)
         self.resub_test = kwargs.pop("resub_test", False)
@@ -57,13 +61,43 @@ class Options(object):
         initialize_psi_options(kwargs)
 
     @property
+    def scratch(self):
+        return self._scratch
+
+    @scratch.setter
+    def scratch(self, val):
+        if val.upper() in ['LSCRATCH', 'SCRATCH']:
+            self._scratch = val.upper()
+        else:
+            raise ValueError("scratch may be LCSRATCH or SCRATCH. Defaults to SCRATCH")
+
+    @property
     def program(self):
         return self._program
-    
+
     @program.setter
     def program(self, val=""):
-        self._program = val
+        prog = val.split("@")
+        self._program = prog[0]
 
+        if not self.parallel: 
+            if '+mpi' in prog[-1]:
+                self.parallel = 'mpi'
+            elif 'serial' in prog[-1]:
+                self.parallel = 'serial'
+            elif '~mpi' in prog[-1]:
+                self.parallel = 'serial'
+            elif prog[0] == 'psi4':
+                self.parallel = 'serial'
+            elif prog[0] == 'orca':
+                self.parallel = 'mpi'
+            elif prog[0] == 'molpro':
+                if self.threads > 1:
+                    self.parallel = 'mixed'
+                else:
+                    self.parallel = 'mpi'
+            elif prog[0] == 'cfour':
+                self.parallel = 'serial' # should be safe default          
 
     @property
     def cluster(self):
@@ -75,7 +109,30 @@ class Options(object):
             if val.upper() in ['SAPELO', 'SAPELO_OLD', 'VULCAN']:
                 self._cluster = val.upper()
         elif val is None:
-            self._cluster = 'HOST'
+            hostname = socket.gethostname()
+            if 'ss-sub' in hostname:
+                self._cluster = 'SAPELO'
+            elif 'vlogin' in hostname:
+                self._cluster = 'VULCAN'
+            else:
+                self._cluster = 'HOST'
+
+    @property
+    def queue(self):
+        return self._queue
+
+    @queue.setter
+    def queue(self, val):
+        if val is None:
+            if self.cluster == 'VULCAN':
+                self._queue = gen4.q
+            elif self.cluster == 'SAPELO':
+                self._queue == 'batch'
+            else:
+                raise ValueError('Do not have a default queue for specified cluster'
+                                 'Please specify a queue')
+        else:
+            self._queue = val
 
     @property
     def wait_time(self):
@@ -112,6 +169,19 @@ class Options(object):
         elif len(regex_strs) != len(self.xtpl_programs):
             raise ValueError("Number of success strings does not match number of programs")
         self._xtpl_success = regex_strs
+
+    @property
+    def email(self):
+        return self._email
+    
+    @email.setter
+    def email(self, val):
+        if not val:
+            self._email = False
+        elif val is True:
+            self.email = "${USER}@uga.edu"
+        else:
+            self._email = val
 
     @property
     def xtpl_energy(self):

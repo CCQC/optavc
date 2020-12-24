@@ -1,7 +1,6 @@
 """
 Cluster is meant to encapsulate all differences between cluster systems for submission and
-resubmission of jobs. Templates, programs, and module load statements may be found at bottom of
-template.
+resubmission of jobs.
 
 """
 
@@ -9,6 +8,9 @@ import subprocess
 import re
 import os
 
+from .submitscripts.sge import sge, vulcan_programs
+from .submitscripts.pbs import pbs, sapelo_old_programs
+from .submitscripts.slurm import slurm, sapelo_programs
 
 class Cluster:
     """ To add a new cluster one must add the following strings to cluster_attributes
@@ -218,7 +220,7 @@ class Cluster:
 
         return job_state
 
-    def get_template(self, job_array=False, email=None):
+    def get_template(self, job_array=False, email=None, parallel='serial'):
         """ Only vulcan currently uses array submission. All other programs only submit
         singlepoints individually
 
@@ -233,17 +235,23 @@ class Cluster:
 
         if self.cluster_name == "VULCAN":
             if job_array:
-                return sge_array_template
+                return sge.sge_array
             else:
-                return sge_template
+                return sge.sge_basic
         elif self.cluster_name == "SAPELO_OLD":
             if email:
-                return pbs_email_template
-            return pbs_template
+                return pbs.pbs_email
+            return pbs.pbs_basic
         elif self.cluster_name == "SAPELO":
-            if email:
-                return slurm_email_template
-            return slurm_template
+            
+            if parallel == 'mpi':
+                if email:
+                    return slurm.slurm_mpi_email
+                return slurm.slurm_mpi
+            else:
+                if email:
+                    return slurm.slurm_email
+                return slurm.slurm_basic
         else:
             raise NotImplementedError("Please add a new template or label new cluster as SGE, PBS, "
                                       "or SLURM")
@@ -257,9 +265,10 @@ class Cluster:
 
         """
 
-        template = "".join(self.get_template(options.job_array))
+        template = self.get_template(options.job_array, options.email, options.parallel)
 
-        progname = options.program.split("@")[0]
+        progname = options.program
+        scratch = 'scratch'
         job_num = int(options.job_array_range[1])
         # cluster = self.options.cluster
 
@@ -274,6 +283,8 @@ class Cluster:
 
         if self.cluster_name in ['SAPELO', "SAPELO_OLD"]:
 
+            scratch = options.scratch.lower()
+
             odict.update({'memory': options.memory,
                           'time': options.time_limit})
 
@@ -283,13 +294,19 @@ class Cluster:
                     'email_opts': options.email_opts})
 
             if self.cluster_name == 'SAPELO':
-                odict.update({'mod_load': sapelo_load.get(progname)})
+
+                # choose program string
+                prog = sapelo_programs.prodict.get(parallel).get(scratch).get(progname)
+                odict.update({'prog': prog})
+
             else:
-                odict.update({'mod_load': sapelo_load_old.get(progname)})
+                prog = sapelo_old_programs.prodict.get(parallel).get(scratch).get(progname)
+                odict.update({'prog': prog})
 
         elif self.cluster_name == 'VULCAN':
-
-            odict.update({'prog': vulcan_load.get(progname)})
+            
+            prog = vulcan_programs.product.get(parallel).get(scratch).get(progname)
+            odict.update({'prog': prog})
 
             if options.job_array:
                 odict.update({'tc': str(job_num)})
@@ -316,99 +333,116 @@ class Cluster:
         return False
 
 
-sge_template = ["""#!/bin/sh
-#$ -q {q}
-#$ -N {name}
-#$ -S /bin/sh
-#$ -cwd
-""",
-""". /etc/profile.d/modules.sh
-
-# Disable production of core dump files
-ulimit -c 0
-
-echo ""
-echo "***********************************************************************"
-echo " Starting job:"
-echo ""
-echo "    Name:              "$JOB_NAME
-echo "    ID:                "$JOB_ID
-echo "    Hostname:          "$HOSTNAME
-echo "    Working directory: "$SGE_O_WORKDIR
-echo ""
-echo "    Submitted using:   optavc "
-echo "***********************************************************************"
-
-
-vulcan load {prog}
-
-export NSLOTS={nslots}
-
-{cline}"""]
-
-sge_array = """#$ -sync y
-#$ -t {jarray}
-#$ -tc {tc}
-"""
-
-pbs_template = ["""#PBS -S /bin/bash
-#PBS -q {q}
-#PBS -N {name}
-#PBS -l nodes=1:ppn={nslots}:Intel
-#PBS -l mem={memory}
-#PBS -l walltime={time}
-""",
-"""cd $PBS_O_WORKDIR/
-echo "PBS_JOBID is $PBS_JOBID"
-
-{mod_load}
-export NSLOTS={nslots}
-time {cline}
-# ignored newline - do not remove"""]
-
-pbs_email = """#PBS -M {email}
-#PBS -m {email_opts}"""
-
-slurm_template = ["""#!/bin/bash
-#SBATCH --partition={q}
-#SBATCH --job-name={name}
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task={nslots}
-#SBATCH --time={time}
-#SBATCH --mem={memory}
-""",
-"""\ncd $SLURM_SUBMIT_DIR
-export OMP_NUM_THREADS={nslots}
-export NSLOTS={nslots}
-
-{mod_load}
-
-time {cline}
-# ignored newline -- do not remove"""]
-
-slurm_email = ["""#SBATCH --mail-user={email}
-#SBATCH --mail-type={email_opts}"""]
-
-sge_array_template = [sge_template[0], sge_array, sge_template[-1]]
-pbs_email_template = [pbs_template[0], pbs_email, pbs_template[-1]]
-slurm_email_template = [slurm_template[0], slurm_email, slurm_template]
-
-progdict = {
-    "molpro": "molpro -n $NSLOTS --nouse-logfile --no-xml-output -o output.dat input.dat",
-    "psi4": "psi4 -n $NSLOTS"
-}
-
-vulcan_load = {
-    "molpro": "molpro@2010.1.67+mpi",
-    "psi4": "psi4@master"
-}
-
-sapelo_load_old = {
-    "molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin/",
-    "psi4": "module load PSI4/1.3.2_conda"
-}
-
-sapelo_load = {
-    "molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin",
-    "psi4": "module load PSI4/1.3.2_conda"
-}
+# sge_template = ["""#!/bin/sh
+# #$ -q {q}
+# #$ -N {name}
+# #$ -S /bin/sh
+# #$ -cwd
+# """,
+# """. /etc/profile.d/modules.sh
+# 
+# # Disable production of core dump files
+# ulimit -c 0
+# 
+# echo ""
+# echo "***********************************************************************"
+# echo " Starting job:"
+# echo ""
+# echo "    Name:              "$JOB_NAME
+# echo "    ID:                "$JOB_ID
+# echo "    Hostname:          "$HOSTNAME
+# echo "    Working directory: "$SGE_O_WORKDIR
+# echo ""
+# echo "    Submitted using:   optavc "
+# echo "***********************************************************************"
+# 
+# 
+# vulcan load {prog}
+# 
+# export NSLOTS={nslots}
+# 
+# {cline}"""]
+# 
+# sge_array = """#$ -sync y
+# #$ -t {jarray}
+# #$ -tc {tc}
+# """
+# 
+# pbs_template = ["""#PBS -S /bin/bash
+# #PBS -q {q}
+# #PBS -N {name}
+# #PBS -l nodes=1:ppn={nslots}:Intel
+# #PBS -l mem={memory}
+# #PBS -l walltime={time}
+# """,
+# """cd $PBS_O_WORKDIR/
+# echo "PBS_JOBID is $PBS_JOBID"
+# 
+# {mod_load}
+# export NSLOTS={nslots}
+# time {cline}
+# # ignored newline - do not remove"""]
+# 
+# pbs_email = """#PBS -M {email}
+# #PBS -m {email_opts}"""
+# 
+# slurm_template = ["""#!/bin/bash
+# #SBATCH --partition={q}
+# #SBATCH --job-name={name}
+# #SBATCH --ntasks=1
+# #SBATCH --cpus-per-task={nslots}
+# #SBATCH --time={time}
+# #SBATCH --mem={memory}
+# """,
+# """\ncd $SLURM_SUBMIT_DIR
+# export OMP_NUM_THREADS={nslots}
+# export NSLOTS={nslots}
+# 
+# {mod_load}
+# 
+# time {cline}
+# # ignored newline -- do not remove"""]
+# 
+# slurm_email = ["""#SBATCH --mail-user={email}
+# #SBATCH --mail-type={email_opts}"""]
+# 
+# sge_array_template = [sge_template[0], sge_array, sge_template[-1]]
+# pbs_email_template = [pbs_template[0], pbs_email, pbs_template[-1]]
+# slurm_email_template = [slurm_template[0], slurm_email, slurm_template]
+# 
+# progdict = {
+#     "molpro": "molpro -n $NSLOTS --nouse-logfile --no-xml-output -o output.dat input.dat",
+#     "psi4": "psi4 -n $NSLOTS"
+# }
+# 
+# vulcan_load = {
+#     "molpro": "molpro@2010.1.67+mpi",
+#     "psi4": "psi4@master"
+# }
+# 
+# sapelo_load_old = {
+#     "molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin/",
+#     "psi4": "module load PSI4/1.3.2_conda"
+# }
+# 
+# sapelo_load = {
+#     "molpro": "export PATH=$PATH:/work/jttlab/molpro/2010/bin",
+#     "psi4": "module load PSI4/1.3.2_conda"
+# }
+# 
+# sapelo_scratch_load = {
+#     "molpro": """export PATH=$PATH:/work/jttlab/molpro/2010/bin
+# """,
+#     "psi4": """module load PSI4/1.3.2_conda""", 
+#     "cfour_mpi": """module load cfour/2.1-iompi-2018a-mpi""",
+#     "cfour_serial": """module load cfour/2.1-iompi-2018a-serial """
+#     "mrcc": """ """
+# }
+# 
+# vulcan_scratch_load = {
+#     "molpro": """ """,
+#     "psi4": """ """,
+#     "cfour": """ """,
+#     "mrcc": """ """
+# }
+# 

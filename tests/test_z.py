@@ -86,3 +86,50 @@ def test_hessian(options):
     finally:
         options.update({'xtpl': xtpl})
 
+number = r"(-?\d*\.\d*)"
+orca_regex = r"\s*FINAL\sSINGLE\sPOINT\sENERGY\s*" + number
+psi4_regex = r"\s**\sCCSD\(T\)\stotal\senergy\s*=" + number
+ecc_regex = r"\sCCSD\(T\)\s*energy\s*" + number
+molpro_regex = r"\s*!CCSD\(T\)\s*total\s*energy\s*" + number
+
+program_options = [({"program": 'psi4', "energy_regex": psi4_regex}, 'serial'),
+                   ({"program": 'psi4', "parallel": 'serial', "energy_regex": psi4_regex}, 'serial'),
+                   ({"program": 'orca', "energy_regex": orca_regex}, 'mpi'),
+                   ({"program": 'orca', "parallel": 'mpi', "energy_regex": orca_regex}, 'mpi'),
+                   ({"program": 'cfour', "parallel": 'serial', "energy_regex": ecc_regex}, 'serial'),
+                   ({"program": 'cfour', "energy_regex": ecc_regex}, 'serial'),
+                   ({"program": 'cfour', "energy_regex": ecc_regex}, 'serial'),
+                   ({"program": 'cfour@2.~mpi', "energy_regex": ecc_regex}, 'serial'),
+                   ({"program": 'cfour@2.+mpi', "energy_regex": ecc_regex}, 'mpi'),
+                   ({"program": 'molpro', "energy_regex": molpro_regex}, 'mpi'),
+                   ({"program": 'molpro', 
+                     "parallel": 'mixed', 
+                     "threads": 2, 
+                     "energy_regex": molpro_regex}, 'mixed')]
+
+@pytest.mark.parametrize("options, expected", program_options) 
+@pytest.mark.parametrize("cluster", ['sge', 'slurm'])
+@pytest.mark.parametrize("scratch", ['scratch', 'lscratch'])
+def test_programs(options, expected, cluster, scratch):
+
+    # need templates
+    # options dictionaries
+    template = options.get('program').split('@')[0] + "_template.dat"
+    print(template)
+    options.update({'template_file_path': template})
+    options_obj = optavc.options.Options(**options)
+
+    assert options_obj.parallel == expected
+
+    template_file_string = open(options_obj.template_file_path).read()
+    tfp = optavc.template.TemplateFileProcessor(template_file_string, options_obj)
+    input_obj = tfp.input_file_object
+    molecule = tfp.molecule
+
+    calc = optavc.calculations.SinglePoint(molecule, input_obj, options_obj, path=options_obj.program)
+
+    if cluster == 'sge' and 'vulcan' in socket.gethostname() or cluster == 'slurm' and 'ss-sub' in socket.gethostname():
+        calc.write_input()
+        calc.run()
+
+        assert calc.check_status()
