@@ -123,16 +123,28 @@ class FiniteDifferenceCalc(Calculation):
 
         """
 
+        check_every = self.cluster.resub_delay(self.options.sleepy_sleep_time)
+        quit = False
         while self.collect_failures():
             if self.options.resub:
                 self.resub(force_resub)
                 force_resub = False  # only try (at most) 1 forced resubmit
                 # use minimum time or user's defined time
-                check_every = self.cluster.resub_delay(self.options.sleepy_sleep_time)
                 time.sleep(check_every)
             else:
-                print(f"""Resub has not been turned on. The following jobs failed: \n
-                        {[calc.disp_num for calc in self.failed]}""")
+
+                for itr, calculation in enumerate(self.calculations):
+                    finished, _ = self.cluster.query_cluster(self.job_ids[itr])
+
+                    if finished and calculation in self.failed:
+
+                        print(f"Resub has not been turned on. The following jobs failed: "
+                              f"{[calc.disp_num for calc in self.failed]}""")
+                        quit = True
+                    else:
+                        time.sleep(check_every)
+
+            if quit:
                 break
 
         # This code may only be reached if self.collect_failures() is empty. check_status

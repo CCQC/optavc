@@ -6,6 +6,9 @@
 molpro = """vulcan load molpro@2010.1.67+mpi
 molpro -n $NSLOTS --nouse-logfile --no-xml-output -o output.dat input.dat"""
 
+molpro_mixed = """vulcan load molpro@2010.1.67+mpi
+molpro -n $NSLOTS -t $THREADS --nouse-logfile --no-xml-output -o output.dat input.dat"""
+
 psi4 = """vulcan load psi4@master
 psi4 -n $NSLOTS
 """
@@ -42,19 +45,6 @@ tar --exclude='*tmp*' --transform "s,^,Job_Data_$JOB_ID/," -vzcf $SGE_O_WORKDIR/
 
 echo " Job complete on `hostname`."
 
-"""
-
-# only difference for the cfour scripts are the loaded module.
-cfour_serial = """# Load the requested Cfour module file
-vulcan load cfour@2.0~mpi+vectorization
-export OMP_NUM_THREADS={nslots}
-{cfour}
-"""
-
-cfour_mpi = """# Load the requested Cfour module file
-vulcan load cfour@2.0+mpi
-export OMP_NUM_THREADS=1
-{cfour}
 """
 
 cfour = """
@@ -98,16 +88,34 @@ echo " Job complete on `hostname`."
 
 """
 
+# only difference for the cfour scripts are the loaded module.
+cfour_serial = """# Load the requested Cfour module file
+vulcan load cfour@2.0~mpi+vectorization
+export OMP_NUM_THREADS=$NSLOTS
+
+""" + cfour
+
+cfour_mpi = """# Load the requested Cfour module file
+vulcan load cfour@2.0+mpi
+export OMP_NUM_THREADS=1
+
+""" + cfour
+
 progdict = {
     "serial": {
-        "lscratch": {
-            "orca": orca,
+        "scratch": {
             "psi4": psi4,
             "cfour": cfour_serial
-        },
-        "mpi": {
-            "cfour": cfour_mpi, 
-            "molpro": molpro
         }
+    },
+    "mpi": {
+        "scratch": {
+            "cfour": cfour_mpi, 
+            "molpro": molpro,
+            "orca": orca
+        }
+    },
+    "mixed": {
+        "scratch": {"molpro": molpro_mixed}
     }
 }

@@ -87,8 +87,8 @@ def test_hessian(options):
 
 number = r"(-?\d*\.\d*)"
 orca_regex = r"\s*FINAL\sSINGLE\sPOINT\sENERGY\s*" + number
-psi4_regex = r"\s**\sCCSD\(T\)\stotal\senergy\s*=" + number
-ecc_regex = r"\sCCSD\(T\)\s*energy\s*" + number
+psi4_regex = r"\s*\*\sCCSD\(T\)\stotal\senergy\s*=\s*" + number
+ecc_regex = r"\s*CCSD\(T\)\s*energy\s*" + number
 molpro_regex = r"\s*!CCSD\(T\)\s*total\s*energy\s*" + number
 
 program_options = [({"program": 'psi4', "energy_regex": psi4_regex}, 'serial'),
@@ -109,6 +109,7 @@ program_options = [({"program": 'psi4', "energy_regex": psi4_regex}, 'serial'),
 @pytest.mark.parametrize("options, expected", program_options) 
 @pytest.mark.parametrize("cluster", ['sge', 'slurm'])
 @pytest.mark.parametrize("scratch", ['scratch', 'lscratch'])
+@pytest.mark.no_calc
 def test_programs(options, expected, cluster, scratch):
 
     # need templates
@@ -127,8 +128,11 @@ def test_programs(options, expected, cluster, scratch):
 
     calc = optavc.calculations.SinglePoint(molecule, input_obj, options_obj, path=options_obj.program)
 
-    if cluster == 'sge' and 'vulcan' in socket.gethostname() or cluster == 'slurm' and 'ss-sub' in socket.gethostname():
+    if cluster == 'sge' and 'vlogin' in socket.gethostname() or cluster == 'slurm' and 'ss-sub' in socket.gethostname():
         calc.write_input()
         calc.run()
 
-        assert calc.check_status()
+        if not calc.check_status(options_obj.energy_regex):
+            assert False
+        else:
+            assert True

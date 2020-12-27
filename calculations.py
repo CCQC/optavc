@@ -24,6 +24,7 @@ import subprocess
 import re
 import shutil
 import copy
+import time
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -259,14 +260,24 @@ class AnalyticGradient(AnalyticCalc):
             self.file_not_found_behavior = f"{not_found} for displacement {disp_num}"
         else:
             self.file_not_found_behavior = not_found
-   
+        
+        self.job_num = None
+
+
     def compute_result(self):
         self.write_input()
-        self.run()
+        self.job_num = self.run()
         print(f"checking for correct working dir: {os.getcwd()}")
         return self.get_result()
 
-    def get_result(self):
+    def reap(self, force_resub):
+        """ force_resub is only here to match interface for findifcalc resub
+        reap is only called from optimization when gradient is expected to
+        have already finished """
+
+        return self.get_result(wait=False)
+
+    def get_result(self, wait=True):
         """ Gets the gradient according to method specified by user
     
         Returns
@@ -276,19 +287,35 @@ class AnalyticGradient(AnalyticCalc):
     
         """
         
-        if self.options.gradient_file:
-            with open(f'{self.path}/{gradient_file}') as f:
-                grad_str = f.readlines()
-        else:
-            output_path = os.path.join(self.path, self.options.output_name)
+        # if self.options.gradient_file:
+        #     with open(f'{self.path}/{gradient_file}') as f:
+        #         grad_str = f.readlines()
+        # else:
+       
+        # delay until our gradient is no longer on the cluster's queue
+        while wait:
+            try:
+                print(self.job_num)
+                finished, job_num = self.cluster.query_cluster(self.job_num)
+            except RuntimeError:
+                time.sleep(10)
+                finished, job_num = self.cluster.query_cluster(self.job_num)
+
+            if finished:
+                status = self.check_status(self.options.energy_regex)
+                wait = False
+            else:
+                time.sleep(self.cluster.resub_delay(self.options.sleepy_sleep_time))
+
+        output_path = os.path.join(self.path, self.options.output_name)
         
-            with open(output_path) as f:
-                output = f.read()
-            
-            # add gradient regex to header regex supplied by user.
-            label_xyz = r"(\s*\w?\w?(\s*-?\d*\.\d*){3})+"
-            regex = self.options.gradient_regex + label_xyz
-            grad_str = re.search(regex, output).group()
+        with open(output_path) as f:
+            output = f.read()
+        
+        # add gradient regex to header regex supplied by user.
+        label_xyz = r"(\s*.*(\s*-?\d+\.\d+){3})+"
+        regex = self.options.gradient_regex + label_xyz
+        grad_str = re.search(regex, output).group()
         
         return self.str_to_psi4mat(grad_str)
 

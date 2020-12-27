@@ -25,7 +25,9 @@ echo "***********************************************************************"
 cd $SGE_O_WORKDIR
 
 export NSLOTS={nslots}
-vulcan load {prog}
+THREADS={threads}
+
+{prog}
 
 """
 
@@ -60,7 +62,9 @@ echo "***********************************************************************"
 cd $SGE_O_WORKDIR/$SGE_TASK_ID
 
 export NSLOTS={nslots}
-vulcan load {prog}
+THREADS={threads}
+
+{prog}
 
 """
 

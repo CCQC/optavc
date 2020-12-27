@@ -277,8 +277,8 @@ class Cluster:
             'nslots': options.nslots,
             'jarray': '1-{}'.format(job_num),
             'progname': progname,
-            'cline': progdict[progname],
-            'name': options.name
+            'name': options.name,
+            'threads': options.threads
         }
 
         if self.cluster_name in ['SAPELO', "SAPELO_OLD"]:
@@ -296,16 +296,16 @@ class Cluster:
             if self.cluster_name == 'SAPELO':
 
                 # choose program string
-                prog = sapelo_programs.prodict.get(parallel).get(scratch).get(progname)
+                prog = sapelo_programs.progdict.get(options.parallel).get(scratch).get(progname)
                 odict.update({'prog': prog})
 
             else:
-                prog = sapelo_old_programs.prodict.get(parallel).get(scratch).get(progname)
+                prog = sapelo_old_programs.progdict.get(options.parallel).get(scratch).get(progname)
                 odict.update({'prog': prog})
 
         elif self.cluster_name == 'VULCAN':
             
-            prog = vulcan_programs.product.get(parallel).get(scratch).get(progname)
+            prog = vulcan_programs.progdict.get(options.parallel).get(scratch).get(progname)
             odict.update({'prog': prog})
 
             if options.job_array:

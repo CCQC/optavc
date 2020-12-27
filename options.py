@@ -12,6 +12,7 @@ class Options(object):
         self.template_file_path = kwargs.pop("template_file_path", "template.dat")
         self.energy_regex = kwargs.pop("energy_regex", "")
         # self.success_regex = kwargs.pop("success_regex", "")
+        self.cluster = kwargs.pop("cluster", "VULCAN")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
         self.nslots = kwargs.pop("nslots", 4)
         self.threads = kwargs.pop("threads", 1)  # for mixed mpi(nslots)/omp(threads)
@@ -27,7 +28,6 @@ class Options(object):
         self.point_group = kwargs.pop("point_group", None)
         self.maxiter = kwargs.pop("maxiter", 20)
         self.mpi = kwargs.pop("mpi", None)
-        self.cluster = kwargs.pop("cluster", "VULCAN")
         self.job_array = kwargs.pop("job_array", False)
         self.queue = kwargs.pop("queue", "")
         self.email = kwargs.pop("email", None)
@@ -116,6 +116,8 @@ class Options(object):
                 self._cluster = 'VULCAN'
             else:
                 self._cluster = 'HOST'
+        else:
+            raise ValueError("Unknown cluster")
 
     @property
     def queue(self):
@@ -123,9 +125,9 @@ class Options(object):
 
     @queue.setter
     def queue(self, val):
-        if val is None:
+        if not val:
             if self.cluster == 'VULCAN':
-                self._queue = gen4.q
+                self._queue = 'gen4.q'
             elif self.cluster == 'SAPELO':
                 self._queue == 'batch'
             else:
@@ -134,6 +136,18 @@ class Options(object):
         else:
             self._queue = val
 
+    @property
+    def input_name(self):
+        return self._input_name
+
+    @input_name.setter
+    def input_name(self, val):
+        
+        if self.program == 'cfour':
+            self._input_name = 'ZMAT'
+        else:
+            self._input_name = val
+    
     @property
     def wait_time(self):
         return self._wait_time
@@ -245,8 +259,8 @@ class Options(object):
             raise ValueError("""Improper Number of basis sets. Optavc can only utilize 2 basis sets
                             currently with two used for CBS extrapolation""")
         elif basis_sets[0] - basis_sets[1] != 1:
-            raise ValueError("""Improper ordering of basis sets. Basis sets must be of the form \ 
-                             [4, 3] to request a [T,Q]Z gradient""")
+            raise ValueError("Improper ordering of basis sets. Basis sets must be of the form" 
+                             "[4, 3] to request a [T,Q]Z gradient")
         self._xtpl_basis_sets = basis_sets
 
     @property
