@@ -18,13 +18,17 @@ class Cluster:
         add a submission command for a submission sciprt.
 
         a queue_info command as a list of strings with None at the last index (to be replaced by
-        the job's_id.
+        the job's_id. Should the name and state of a single job.
 
-        a regex_string for the job's 'state' or None (if none must handle in job_finished)
+        a regex_string for the job's 'state' or None (if None must add code in job_finished 
+        as explicit as conditional)
 
         a regex_string for the jobs's name to which pulls out the singlepoint number (number must be
-        in second capture group 2 see below examples)
+        in second capture group 2 see below examples) ex. STEP--00-1
 
+        # wait time is a more general pause than resub_delay. resub_delay minimizes
+        # the up-time of optavc. 'wait_time' makes sure the cluster has enough time
+        # to see jobs
     """
     def __init__(self, cluster_name):
         self.cluster_name = cluster_name
@@ -36,35 +40,43 @@ class Cluster:
         self.job_name = attributes.get('job_name')
         self.job_id = attributes.get('job_id')
         self.resub_delay = attributes.get('resub_delay')
+        self.wait_time = attributes.get('wait_time')
 
     @staticmethod
     def cluster_attributes(cluster_name):
+
+        # Please add a cluster here or if optavc can't find your jobs
+        # on a cluster please adjust 'resub_delay' and 'wait_time'
 
         attributes = {'VULCAN': {'submit': 'qsub',
                                  'queue_info': ['qacct', '-j', None],
                                  'job_state': None,
                                  'job_name': r'jobname\s+.*(--\d*)?-(\d*)',
                                  'job_id': r'Your\s*job\s*(\d*)',
-                                 'resub_delay': lambda sleep: max(10, sleep)},
+                                 'resub_delay': lambda sleep: max(10, sleep),
+                                 'wait_time': 5},
                       'SAPELO_OLD': {'submit': 'qsub',
                                      'queue_info': ['qstat', '-f', None],
                                      'job_state': r'\s*job_state\s=\sC',
                                      'job_name': r'\s*Job_Name\s=\s*.*(\-+\d*)?\-(\d*)',
                                      'job_id': r'(\d*)\.sapelo2',
-                                     'resub_delay': lambda sleep: max(60, sleep)},
+                                     'resub_delay': lambda sleep: max(60, sleep),
+                                     'wait_time': 5},
                       'SAPELO': {'submit': 'sbatch',
                                    'queue_info': ['sacct', '-X', '--format=JobID,JobName%60,STATE',
                                                   '-j', None],
                                    'job_state': None,
                                    'job_name': r'\s.+(--\d*)?-(\d+)',
                                    'job_id': r'\.*(\d+)',
-                                   'resub_delay': lambda sleep: max(60, sleep)}}
+                                   'resub_delay': lambda sleep: max(60, sleep),
+                                   'wait_time': 30}}
 
         return attributes.get(cluster_name)
 
     def submit(self, options):
         """ This is a very limited submit function. A template sh file
-        is taken and formatted with queue and nthread information.
+        is taken from the submitscripts dir, formatted with make_sub_script(), and
+        then run using the cluster's submit_command
         """
 
         out = self.make_sub_script(options)
@@ -217,7 +229,8 @@ class Cluster:
                 # simple check for substring in output
                 if not ("PENDING" in output or "RUNNING" in output):
                     job_state = True
-
+        print(f"state: {job_state}")
+        print(f"output: {output}")
         return job_state
 
     def get_template(self, job_array=False, email=None, parallel='serial'):
@@ -244,7 +257,7 @@ class Cluster:
             return pbs.pbs_basic
         elif self.cluster_name == "SAPELO":
             
-            if parallel == 'mpi':
+            if parallel in ['mpi', 'mixed']:
                 if email:
                     return slurm.slurm_mpi_email
                 return slurm.slurm_mpi
@@ -289,15 +302,18 @@ class Cluster:
                           'time': options.time_limit})
 
             if options.email:
-                odict.update({
-                    'email': options.email,
-                    'email_opts': options.email_opts})
+                odict.update({'email_opts': options.email_opts})
 
             if self.cluster_name == 'SAPELO':
 
                 # choose program string
+                if progname == 'molpro':
+                    constraint = 'Intel'
+                else:
+                    constraint = 'EPYC|Intel'
+
                 prog = sapelo_programs.progdict.get(options.parallel).get(scratch).get(progname)
-                odict.update({'prog': prog})
+                odict.update({'prog': prog, 'constraint': constraint})
 
             else:
                 prog = sapelo_old_programs.progdict.get(options.parallel).get(scratch).get(progname)

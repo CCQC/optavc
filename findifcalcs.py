@@ -133,14 +133,18 @@ class FiniteDifferenceCalc(Calculation):
                 time.sleep(check_every)
             else:
 
+                # coder should always add a wait before calling query_cluster
+                time.sleep(self.cluster.wait_time)
                 for itr, calculation in enumerate(self.calculations):
                     finished, _ = self.cluster.query_cluster(self.job_ids[itr])
 
                     if finished and calculation in self.failed:
-
-                        print(f"Resub has not been turned on. The following jobs failed: "
-                              f"{[calc.disp_num for calc in self.failed]}""")
-                        quit = True
+                        if not calculation.check_status(calculation.options.energy_regex):
+                            print(f"Resub has not been turned on. The following jobs are currently marked"
+                                  f"as failed: "
+                                  f"{[calc.disp_num for calc in self.failed]}"""
+                                  f"calculation {itr} - {calculation} has triggered this message") 
+                            raise RuntimeError("Jobs have finished but one or more have failed")
                     else:
                         time.sleep(check_every)
 
@@ -152,11 +156,8 @@ class FiniteDifferenceCalc(Calculation):
         self.build_findif_dict()
 
     def compute_result(self):
-        print(f"compute result called")
         self.sow()
-        print(f"sow has finished")
         self.run()
-        print(f"run has finished preparing to call reap")
         return self.reap()
 
     def resub(self, force_resub=False):
@@ -171,18 +172,17 @@ class FiniteDifferenceCalc(Calculation):
             self.options.job_array = False  # once we've resubmitted once. Turn array off
             return
 
-        time.sleep(5)  # ensure that the queue has time to see all jobs
-
         eliminations = []
         resubmitting = []
 
+
+        time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
         for job in self.job_ids:
             try:
                 finished, job_num = self.cluster.query_cluster(job)
             except RuntimeError:
-                time.sleep(10)
+                time.sleep(self.cluster.wait_time)
                 finished, job_num = self.cluster.query_cluster(job)
-                # let RuntimeError go if we still can't find job_state after second attempt
             if not finished:
                 # Jobs are only considered for resubmission if the cluster has marked as finished
                 continue
@@ -496,7 +496,7 @@ class Hessian(FiniteDifferenceCalc):
                 constructor = AnalyticGradient
         else:
             if self.options.dertype:
-                create = psi4.driver_findif.hessian_from_energie_geometries 
+                create = psi4.driver_findif.hessian_from_energy_geometries 
                 compute = psi4.driver_findif.compute_hessian_from_energies
                 constructor = SinglePoint 
             else:

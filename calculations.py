@@ -84,10 +84,6 @@ class AnalyticCalc(Calculation):
         -------
         str : output captured from qsub *.sh """
 
-        print("Running calculation")
-        print("working_directory")
-        print("self.path")
-
         working_directory = os.getcwd()
         os.chdir(self.path)
 
@@ -114,8 +110,6 @@ class AnalyticCalc(Calculation):
         directory
         """
 
-        print("writing input")
-        print(f"path: self.path")
         if not os.path.exists(self.path):
             os.makedirs(self.path)
         self.molecule.set_units(self.options.input_units)
@@ -204,7 +198,9 @@ class SinglePoint(AnalyticCalc):
 
         """
 
-        with open(f'{self.path}/output.dat') as f:
+        output_path = os.path.join(self.path, self.options.output_name)
+        
+        with open(output_path) as f:
             output = f.read()
 
         energy = self._get_energy_float(self.options.energy_regex, output)

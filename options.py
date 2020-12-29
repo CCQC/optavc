@@ -12,7 +12,7 @@ class Options(object):
         self.template_file_path = kwargs.pop("template_file_path", "template.dat")
         self.energy_regex = kwargs.pop("energy_regex", "")
         # self.success_regex = kwargs.pop("success_regex", "")
-        self.cluster = kwargs.pop("cluster", "VULCAN")
+        self.cluster = kwargs.pop("cluster", None)
         self.correction_regexes = kwargs.pop("correction_regexes", "")
         self.nslots = kwargs.pop("nslots", 4)
         self.threads = kwargs.pop("threads", 1)  # for mixed mpi(nslots)/omp(threads)
@@ -105,18 +105,19 @@ class Options(object):
 
     @cluster.setter
     def cluster(self, val):
-        if isinstance(val, str):
-            if val.upper() in ['SAPELO', 'SAPELO_OLD', 'VULCAN']:
-                self._cluster = val.upper()
-        elif val is None:
+        
+        if val is None:
             hostname = socket.gethostname()
-            if 'ss-sub' in hostname:
+            if 'ss-sub2' in hostname:
                 self._cluster = 'SAPELO'
             elif 'vlogin' in hostname:
                 self._cluster = 'VULCAN'
             else:
                 self._cluster = 'HOST'
+        elif isinstance(val, str):
+            self._cluster = val.upper()
         else:
+            self._cluster = None
             raise ValueError("Unknown cluster")
 
     @property
@@ -129,7 +130,7 @@ class Options(object):
             if self.cluster == 'VULCAN':
                 self._queue = 'gen4.q'
             elif self.cluster == 'SAPELO':
-                self._queue == 'batch'
+                self._queue = 'batch'
             else:
                 raise ValueError('Do not have a default queue for specified cluster'
                                  'Please specify a queue')

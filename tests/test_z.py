@@ -12,6 +12,8 @@ For simplicity. Run pytest test_optavc.py
 import pytest
 import os
 import socket
+import time
+import shutil
 
 import optavc
 from optavc.tests import utils
@@ -100,10 +102,11 @@ program_options = [({"program": 'psi4', "energy_regex": psi4_regex}, 'serial'),
                    ({"program": 'cfour', "energy_regex": ecc_regex}, 'serial'),
                    ({"program": 'cfour@2.~mpi', "energy_regex": ecc_regex}, 'serial'),
                    ({"program": 'cfour@2.+mpi', "energy_regex": ecc_regex}, 'mpi'),
-                   ({"program": 'molpro', "energy_regex": molpro_regex}, 'mpi'),
+                   ({"program": 'molpro', "memory": "3GB", "energy_regex": molpro_regex}, 'mpi'),
                    ({"program": 'molpro', 
                      "parallel": 'mixed', 
-                     "threads": 2, 
+                     "threads": 2,
+                     "memory": '3GB', 
                      "energy_regex": molpro_regex}, 'mixed')]
 
 @pytest.mark.parametrize("options, expected", program_options) 
@@ -112,10 +115,15 @@ program_options = [({"program": 'psi4', "energy_regex": psi4_regex}, 'serial'),
 @pytest.mark.no_calc
 def test_programs(options, expected, cluster, scratch):
 
+
+    
     # need templates
     # options dictionaries
-    template = options.get('program').split('@')[0] + "_template.dat"
+    progname = options.get('program').split('@')[0]
+    template = progname + "_template.dat"
+    shutil.rmtree(os.path.join('./', progname), ignore_errors=True)
     print(template)
+    
     options.update({'template_file_path': template})
     options_obj = optavc.options.Options(**options)
 
@@ -131,6 +139,9 @@ def test_programs(options, expected, cluster, scratch):
     if cluster == 'sge' and 'vlogin' in socket.gethostname() or cluster == 'slurm' and 'ss-sub' in socket.gethostname():
         calc.write_input()
         calc.run()
+        
+        # time.sleep(calc.cluster.resub_delay(options_obj.sleepy_sleep_time))
+        time.sleep(10)
 
         if not calc.check_status(options_obj.energy_regex):
             assert False
