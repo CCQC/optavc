@@ -108,7 +108,7 @@ echo " Saving data and cleaning up..."
 # delete any temporary files that my be hanging around.
 rm -f *.tmp*
 find . -type f -size +50M -exec rm -f {} \;
-tar --exclude='*tmp*' --transform "s,^,Job_Data_$JOB_ID/," -vzcf $SLURM_SUBMIT_DIR/Job_Data_$JOB_ID.tar.gz *
+tar --exclude='*tmp*' --transform "s,^,Job_Data_$SLURM_JOB_ID/," -vzcf $SLURM_SUBMIT_DIR/Job_Data_$SLURM_JOB_ID.tar.gz *
 
 echo " Job complete on `hostname`."
 
@@ -124,6 +124,8 @@ mkdir -p $scratch_dir
 """ + orca_common
 
 cfour_common = """
+# make sure MRCC is around just in case
+export PATH=$PATH:/work/jttlab/mrcc/2019/
 prefix=/apps/eb/$module/
 module load $module
 
@@ -153,9 +155,9 @@ echo " Saving data and cleaning up..."
 if [ -e ZMATnew ]; then cp -f ZMATnew $SLURM_SUBMIT_DIR/ZMATnew ; fi
 
 # Create a job data archive file
-tar --transform "s,^,Job_Data_$JOB_ID/," -vcf $SLURM_SUBMIT_DIR/Job_Data_$JOB_ID.tar OPTARC FCMINT FCMFINAL ZMATnew JMOL.plot JOBARC JAINDX FJOBARC DIPDER HESSIAN MOLDEN NEWMOS den.dat
-if [ -e zmat001 ]; then tar --transform "s,^,Job_Data_$JOB_ID/," -vrf $SLURM_SUBMIT_DIR/Job_Data_$JOB_ID.tar zmat* ; fi
-gzip $SLURM_SUBMIT_DIR/Job_Data_$JOB_ID.tar
+tar --transform "s,^,Job_Data_$SLURM_JOB_ID/," -vcf $SLURM_SUBMIT_DIR/Job_Data_$SLURM_JOB_ID.tar OPTARC FCMINT FCMFINAL ZMATnew JMOL.plot JOBARC JAINDX FJOBARC DIPDER HESSIAN MOLDEN NEWMOS den.dat
+if [ -e zmat001 ]; then tar --transform "s,^,Job_Data_$SLURM_JOB_ID/," -vrf $SLURM_SUBMIT_DIR/Job_Data_$SLURM_JOB_ID.tar zmat* ; fi
+gzip $SLURM_SUBMIT_DIR/Job_Data_$SLURM_JOB_ID.tar
 
 echo " Job complete on `hostname`."
 
@@ -166,7 +168,7 @@ cfour_serial = """module=cfour/2.1-iompi-2018a-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
-mkdir $scratch_dir
+mkdir -p $scratch_dir
 
 """ + cfour_common
 
@@ -174,24 +176,24 @@ cfour_serial_lscratch = """module=cfour/2.1-iompi-2018a-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
-mkdir $scratch_dir
+mkdir -p $scratch_dir
 
 """ + cfour_common
 
 cfour_mpi = """module=cfour/2.1-iompi-2018a-mpi
-
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
-mkdir $scratch_dir
+mkdir -p $scratch_dir
 
 echo -e "\t$NSLOTS" > ./ncpu   # CFour appears to just claim any and all cpus
+echo -e "\t$NSLOTS" > $scratch_dir/ncpu
 """ + cfour_common
 
 cfour_mpi_lscratch = """module=cfour/2.1-iompi-2018a-mpi
-
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
-mkdir $scratch_dir
+mkdir -p $scratch_dir
 
 echo -e "\t$NSLOTS" > ./ncpu   # CFour appears to just claim any and all cpus
+echo -e "\t$NSLOTS" > $scratch_dir/ncpu
 """ + cfour_common
 
 progdict = {

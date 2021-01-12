@@ -38,7 +38,7 @@ class Options(object):
         self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
-        self.gradient_file = kwargs.pop("gradient_file", None)
+        # self.gradient_file = kwargs.pop("gradient_file", None)
         self.gradient_regex = kwargs.pop("gradient_regex", None)
         self.dertype = kwargs.pop('dertype', None)
         self.xtpl = None  # This will be set by xtpl_setter
@@ -108,7 +108,7 @@ class Options(object):
         
         if val is None:
             hostname = socket.gethostname()
-            if 'ss-sub2' in hostname:
+            if 'ss-sub' in hostname:
                 self._cluster = 'SAPELO'
             elif 'vlogin' in hostname:
                 self._cluster = 'VULCAN'

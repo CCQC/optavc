@@ -257,6 +257,7 @@ class AnalyticGradient(AnalyticCalc):
         else:
             self.file_not_found_behavior = not_found
         
+        self.disp_num = disp_num 
         self.job_num = None
 
 
@@ -289,6 +290,7 @@ class AnalyticGradient(AnalyticCalc):
         # else:
        
         # delay until our gradient is no longer on the cluster's queue
+        time.sleep(self.cluster.wait_time)
         while wait:
             try:
                 print(self.job_num)
