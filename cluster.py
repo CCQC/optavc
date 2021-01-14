@@ -12,6 +12,7 @@ from .submitscripts.sge import sge, vulcan_programs
 from .submitscripts.pbs import pbs, sapelo_old_programs
 from .submitscripts.slurm import slurm, sapelo_programs
 
+
 class Cluster:
     """ To add a new cluster one must add the following strings to cluster_attributes
 

@@ -4,7 +4,9 @@ from abc import abstractmethod
 
 import numpy as np
 import psi4
+
 from .calculations import Calculation, SinglePoint, AnalyticGradient
+from .cluster import Cluster
 
 
 class FiniteDifferenceCalc(Calculation):
@@ -26,27 +28,32 @@ class FiniteDifferenceCalc(Calculation):
 
     def __init__(self, molecule, inp_file_obj, options, path="."):
 
-        super().__init__(molecule, inp_file_obj, options, path)
+        super().__init__(molecule, options, path)
+        self.inp_file_obj = inp_file_obj
         self.result = None
         self.calculations = []  # all analytic calculation objects
         self.failed = []  # analytic calculations that have failed
         self.job_ids = []
-        
+
+        if self.options.cluster == 'HOST':
+            self.cluster = None
+        else:
+            self.cluster = Cluster(self.options.cluster)
+
         # This essentially defines an abstract attribute. Forces a child class to set these
         # attributes without setting here
         self.findifrec: object
-        self.result: psi4.core.Matrix
-        
+
         # child class will set constructor Singlepoint or AnalyticGradient
         self.constructor = None
-        
 
     @property
     def ndisps(self):
         return len(self.calculations)
 
     def make_calculations(self):
-        """ Use psi4's finite difference machinery to create dispalcements and singlepoint or gradient calculations """
+        """ Use psi4's finite difference machinery to create dispalcements and singlepoint
+        or gradient calculations """
         ref_molecule = self.molecule.copy()
         ref_path = os.path.join(self.path, "{:d}".format(1))
         ref_calc = self.constructor(ref_molecule, self.inp_file_obj, self.options, path=ref_path,
@@ -74,6 +81,13 @@ class FiniteDifferenceCalc(Calculation):
             raise
 
     def get_reference_energy(self):
+        """Get result stored in the finite difference dictionary
+
+        Returns
+        -------
+        float
+
+        """
         try:
             return self.findifrec['reference']['energy']
         except KeyError:
@@ -96,7 +110,7 @@ class FiniteDifferenceCalc(Calculation):
         return [calc.run() for calc in self.calculations]
 
     def get_energies(self):
-        return [calc.get_result() for calc in self.calculations]
+        return [calc.compute_result() for calc in self.calculations]
 
     @abstractmethod
     def run(self):
@@ -114,8 +128,8 @@ class FiniteDifferenceCalc(Calculation):
             os.chdir(working_directory)
 
     def reap(self, force_resub=False):
-        """ Once all calculations have finished, collect and place in self.findifrec. Child classes will use 
-        self.findifrec to construct the result
+        """ Once all calculations have finished, collect and place in self.findifrec.
+        Child classes will use self.findifrec to construct the result
 
         Raises
         ------
@@ -175,7 +189,6 @@ class FiniteDifferenceCalc(Calculation):
         eliminations = []
         resubmitting = []
 
-
         time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
         for job in self.job_ids:
             try:
@@ -228,7 +241,8 @@ class FiniteDifferenceCalc(Calculation):
         self.failed = []
 
         for index, calc in enumerate(self.calculations):
-            # This if statement is only here for testing purposes and should only apply to singlepoints
+            # This if statement is only here for testing purposes and should only apply to
+            # singlepoints
             if self.options.resub_test:
                 calc.insert_Giraffe()
                 if calc.check_resub():
@@ -279,16 +293,16 @@ class FiniteDifferenceCalc(Calculation):
                                "allowed resubmissions")
 
     def keys_and_results(self):
-        return [(calc.key, calc.get_result()) for calc in self.calculations]
+        return [(calc.key, calc.compute_result()) for calc in self.calculations]
 
     @abstractmethod
     def build_findif_dict(self):
         pass
 
-
     @abstractmethod
     def findif_methods(self):
         pass
+
 
 class Gradient(FiniteDifferenceCalc):
 
@@ -384,6 +398,7 @@ class Hessian(FiniteDifferenceCalc):
         self.create_hess, self.compute_hess, self.constructor = self.findif_methods()
         self.findifrec = self.create_hess(self.psi4_mol_obj, -1)
         self.make_calculations()
+        self.energy = None  # Allow procedure to set
 
     def run(self):
         if self.options.name.upper() == 'STEP':
@@ -396,16 +411,8 @@ class Hessian(FiniteDifferenceCalc):
 
         hess = self.compute_hess(self.findifrec, -1)
         self.result = psi4.core.Matrix.from_array(hess)
-        # Could we get the global_option basis? Yes.
-        # Would we need to set it, just for this? Yes.
-        # Does it mean anything. No, not with our application.
-        wfn = psi4.core.Wavefunction.build(self.psi4_mol_obj, 'sto-3g')
-        wfn.set_hessian(self.result)
-        wfn.set_energy(self.findifrec['reference']['energy'])
-        psi4.core.set_variable("CURRENT ENERGY", self.findifrec['reference']['energy'])
-        psi4.driver.vibanal_wfn(wfn)
-        psi4.driver._hessian_write(wfn)
-
+        Hessian.psi4_frequencies(self.psi4_mol_obj, self.result,
+                                 self.findifrec['reference']['energy'])
         return self.result
 
     def get_reference_energy(self):
@@ -414,61 +421,6 @@ class Hessian(FiniteDifferenceCalc):
             return self.calculations[0].get_energy()
         else:
             return super().get_reference_energy()
-
-    @staticmethod
-    def xtpl_hessian(molecule, xtpl_inputs, options, path="./HESS", sow=True):
-        """ Call compute_hessian repeatedly
-        Need to do: (CCSD w/ (T) correction)
-                    MP2/QZ, SCF/QZ and MP2/TZ
-        """
-
-        from .xtpl import xtpl_wrapper, energy_correction, order_high_low  # circular import fix
-
-        hessians = []
-        ref_energies = []
-
-        for index, hess_obj in enumerate(xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options,
-                                                      path)):
-            
-            # separate_mp2 denotes when a "new" calculation needs to be performed
-            if hess_obj.options.xtpl_input_style == [2, 2]:
-                separate_idx = 2
-            else:
-                separate_idx = 1
-
-            hess_obj.options.name = 'hess'
-
-            if index not in [0, separate_idx] or sow is False:
-                hessian = hess_obj.reap(force_resub=True)
-            else:
-                hessian = hess_obj.compute_result()
-
-            hessians.append(hessian)
-            ref_energies.append(hess_obj.get_reference_energy())
-        
-        basis_sets = options.xtpl_basis_sets
-        # Same order as in xtpl_grad()
-        
-        # xtpl.order_high_low
-        ordered_en, ordered_hess = order_high_low(hessians, ref_energies, options.xtpl_input_style)
-        
-        final_en, final_hess, _ = energy_correction(basis_sets, ordered_hess, ordered_en)
-
-        print("\n\n=============================XTPL-HESS=============================")
-        print(f"Energies:\n {ordered_en}")
-        print(f"final_energy: {final_en}")
-        print(f"final_hess:\n {final_hess.np}")
-        print("===================================================================\n\n")
-
-        psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
-        wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
-        wfn.set_hessian(final_hess)
-        wfn.set_energy(final_en)
-        psi4.core.set_variable("CURRENT ENERGY", final_en)
-        psi4.driver.vibanal_wfn(wfn)
-        psi4.driver._hessian_write(wfn)
-
-        return final_hess
 
     def findif_methods(self):
         """ Use options obejct to determine how finite differences will be performed and what
@@ -518,4 +470,20 @@ class Hessian(FiniteDifferenceCalc):
                     self.findifrec['reference']['energy'] = self.get_reference_energy()
             else:
                 self.findifrec['displacements'][key][calc_type] = result
+
+    @staticmethod
+    def psi4_frequencies(psi4_mol_obj, result, energy):
+        # Could we get the global_option basis? Yes.
+        # Would we need to set it, just for this? Yes.
+        # Does it mean anything. No, not with our application.
+
+        if isinstance(result, np.ndarray):
+            result = psi4.core.Matrix.from_array(result)
+
+        wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
+        wfn.set_hessian(result)
+        wfn.set_energy(energy)
+        psi4.core.set_variable("CURRENT ENERGY", energy)
+        psi4.driver.vibanal_wfn(wfn)
+        psi4.driver._hessian_write(wfn)
 

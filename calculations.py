@@ -34,18 +34,13 @@ from .cluster import Cluster
 
 
 class Calculation(ABC):
-    def __init__(self, molecule, inp_file_obj, options, path=".", key=None):
+    def __init__(self, molecule, options, path=".", key=None):
         self.molecule = molecule
-        self.inp_file_obj = inp_file_obj
         self.options = copy.deepcopy(options)
         self.path = os.path.abspath(path)
         self.key = key
         self.dict_obj = {}
         self.resub_count = 0
-        if self.options.cluster == 'HOST':
-            self.cluster = None
-        else:
-            self.cluster = Cluster(self.options.cluster)
 
     def to_dict(self):
         """ Not generally used. Serialize all object attributes and add in subset of keywords """
@@ -74,9 +69,15 @@ class Calculation(ABC):
 class AnalyticCalc(Calculation):
     
     def __init__(self, molecule, inp_file_obj, options, path=".", key=None):
-        super().__init__(molecule, inp_file_obj, options, path, key)
+        super().__init__(molecule, options, path, key)
+        self.inp_file_obj = inp_file_obj
         self.options.job_array = False  # If interacting with singlepoint, cannot use array or -sync
         self.options.job_array_range = (1, 1)  # job array range always checked in submitter
+
+        if self.options.cluster == 'HOST':
+            self.cluster = None
+        else:
+            self.cluster = Cluster(self.options.cluster)
 
     def run(self):
         """ Change to singlepoint directory. Effect is to invoke subprocess 
@@ -240,11 +241,12 @@ class SinglePoint(AnalyticCalc):
         with open(output_path, 'w') as file:
             file.writelines(output_text)
 
+
 class AnalyticGradient(AnalyticCalc):
     """ This class was implemented in order to use CFour's analytic gradients with the psi4 CBS
     procedure. CCSD(T) gradients from CFour are not available through the Psi4/CFour interface.
     """
-    
+
     def __init__(self, molecule, inp_file_obj, options, disp_num=None, path=".", key=None):
         super().__init__(molecule, inp_file_obj, options, path, key)
 
@@ -259,7 +261,6 @@ class AnalyticGradient(AnalyticCalc):
         
         self.disp_num = disp_num 
         self.job_num = None
-
 
     def compute_result(self):
         self.write_input()
@@ -318,7 +319,13 @@ class AnalyticGradient(AnalyticCalc):
         return self.str_to_psi4mat(grad_str)
 
     def get_reference_energy(self):
-        """ Get reference energy from gradient calculation """ 
+        """ Get reference energy from gradient calculation
+
+        Returns
+        -------
+        float
+
+        """
         
         output_path = os.path.join(self.path, self.options.output_name)
         

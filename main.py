@@ -77,18 +77,19 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
         if path == '.':
             path = './HESS'
 
-        if options_obj.xtpl:
-            findifcalcs.Hessian.xtpl_hessian(molecule, xtpl_inputs, options_obj, path, sow)
-        else:
+        use_procedure, hess_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj, path)
+        if not use_procedure:
             hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
-            if sow:
-                hess_obj.compute_result()
-            else:
-                hess_obj.reap(force_resub=True)
+
+        if sow:
+            hess_obj.compute_result()
+        else:
+            hess_obj.reap(force_resub=True)
+
         return True
     else:
         raise ValueError(
-            """Can only run deriv or optimizations. For gradients see findifcalcs.py to run or
+            """Can only run hessians or optimizations. For gradients see findifcalcs.py to run or
             add wrapper here""")
 
 
@@ -117,8 +118,10 @@ def test_singlepoints(jobtype, molecule, options_obj, input_obj, xtpl_inputs=Non
         if path == '.':
             path = './HESS'
 
-        if options_obj.xtpl:
-            for hess_obj in xtpl.xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options_obj):
+        use_procedure, xtpl_hess_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj,
+                                                               path, iteration=0)
+        if use_procedure:
+            for hess_obj in xtpl_hess_obj.calc_objects:
                 ref_singlepoint = hess_obj.calculations[0]
                 assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
                 assert ref_singlepoint.get_energy()
