@@ -5,27 +5,31 @@ import copy
 import psi4
 
 from .molecule import Molecule
-from .calculations import Calculation, AnalyticGradient
+from .calculations import AnalyticGradient
 from .findifcalcs import Gradient
 from .xtpl import xtpl_delta_wrapper
 
 
-class Optimization(Calculation):
+class Optimization():
+    """ Run AnalyticGradient and Gradient calculations or any procedures which contain and only contain
+    those object types """
 
     def __init__(self, molecule, input_obj, options, xtpl_inputs=None):
-        super().__init__(molecule, input_obj, options)
+        
+        self.molecule = molecule
+        self.options = options
+        self.path = os.path.abspath(".")
         self.inp_file_obj = input_obj
         self.step_molecules = []
         self.xtpl_inputs = xtpl_inputs
         self.paths = []  # safety measure. No gradients should share the same path object
 
     def run(self, restart_iteration=0, user_xtpl_restart=None):
-        
+
         # copy step if restart would have overwritten some steps
         self.copy_old_steps(restart_iteration, user_xtpl_restart)
-
+        
         for iteration in range(self.options.maxiter):
-            self.step_molecules.append(self.molecule)
             # compute the gradient for the current molecule --
             # the path for gradient computation is set to "STEP0x"
 
@@ -34,7 +38,8 @@ class Optimization(Calculation):
             grad_obj = self.create_opt_gradient(iteration)
             grad = self.run_gradient(iteration, restart_iteration, grad_obj)
             ref_energy = grad_obj.get_reference_energy()
-
+            self.step_molecules.append(self.molecule)
+            
             # if self.options.xtpl:
             #     xtpl_gradients = self.create_xtpl_gradients(iteration, restart_iteration,
             #                                                 user_xtpl_restart)
@@ -48,8 +53,8 @@ class Optimization(Calculation):
             try:
                 # put the gradient, energy, and molecule for the current step in psi::Environment
                 # before calling psi4.optking()
-                psi4.core.set_gradient(grad)
                 psi4.core.set_variable('CURRENT ENERGY', ref_energy)
+                psi4.core.set_gradient(grad)
                 psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
 
                 if self.options.point_group is not None:  # otherwise autodetect
@@ -80,7 +85,7 @@ class Optimization(Calculation):
             slay()  # kill all workers before exiting
 
         print("\n\n OPTIMIZATION HAS FINISHED!\n\n")
-        return True
+        return grad, ref_energy, self.molecule
 
     def run_gradient(self, iteration, restart_iteration, grad_obj, force_resub=True):
         """ run a single gradient for an optimization. Reaping if iteration, restart_iteration,
@@ -109,9 +114,9 @@ class Optimization(Calculation):
 
         try:
             if iteration < restart_iteration:
-                grad = grad_obj.reap(force_resub)  # could be 1 or more gradients
+                grad = grad_obj.get_result(force_resub)  # could be 1 or more gradients
             else:
-                self.enforce_unique_paths(grad_obj)
+                # self.enforce_unique_paths(grad_obj)
                 grad = grad_obj.compute_result()
         except RuntimeError as e:
             print(str(e))
@@ -124,7 +129,7 @@ class Optimization(Calculation):
             print(str(e))
             raise
 
-        return grad
+        return psi4.core.Matrix.from_array(grad)
 
     def create_opt_gradient(self, iteration):
         """  Create Gradient with path and name updated by iteration

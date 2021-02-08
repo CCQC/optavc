@@ -10,8 +10,8 @@ from .cluster import Cluster
 
 
 class FiniteDifferenceCalc(Calculation):
-    """ A Calculation consisting of a series of Singlepoints with needed machinery to submit,
-    collect and assemble these Singlepoints.
+    """ A Calculation consisting of a series of AnalyticCalc objects with needed machinery to submit,
+    collect and assemble these calculations.
     
     Attributes
     ----------
@@ -73,12 +73,11 @@ class FiniteDifferenceCalc(Calculation):
             disp_calc.options.name = f"{self.options.name}-{disp_num+2}"
             self.calculations.append(disp_calc)
 
-    def get_result(self):
-        try:
-            return self.result
-        except KeyError:
-            print("Gradient not yet defined -- did you remember to run compute_gradient() first?")
-            raise
+    def get_result(self, force_resub=False):
+        if not self.result:
+            self.reap(force_resub)
+            self.build_findif_dict()
+        return self.result.np
 
     def get_reference_energy(self):
         """Get result stored in the finite difference dictionary
@@ -94,7 +93,7 @@ class FiniteDifferenceCalc(Calculation):
             print("Energy not yet computed -- did you remember to run compute_gradient() first?")
             raise
 
-    def sow(self):
+    def write_input(self):
         for calc in self.calculations:
             calc.write_input()
 
@@ -107,14 +106,20 @@ class FiniteDifferenceCalc(Calculation):
             job ids (from AnalyticCalc.run) for all job ids that were just run.
 
         """
-        return [calc.run() for calc in self.calculations]
+
+        job_ids = [calc.run() for calc in self.calculations]
+        
+        for calc_itr, calc in enumerate(self.calculations):
+            calc.job_num = job_ids[calc_itr]
+
+        return job_ids
 
     def get_energies(self):
-        return [calc.compute_result() for calc in self.calculations]
+        return [calc.get_reference_energy() for calc in self.calculations]
 
     @abstractmethod
     def run(self):
-
+        # marked as abstract to ensure child classes must add to implementation
         self.options.job_array = self.cluster.enforce_job_array(self.options.job_array)
 
         if not self.options.job_array:
@@ -124,17 +129,22 @@ class FiniteDifferenceCalc(Calculation):
             working_directory = os.getcwd()
             os.chdir(self.path)
             # submit output not captured. Job ID not needed for an array
-            self.cluster.submit(self.options)
+            self.job_ids = [self.cluster.submit(self.options)]
             os.chdir(working_directory)
 
+            for calc in self.calculations:
+                calc.job_num = self.job_ids
+
+    def compute_result(self):
+        self.write_input()
+        self.run()
+        time.sleep(self.cluster.wait_time)
+        return self.get_result()
+
     def reap(self, force_resub=False):
-        """ Once all calculations have finished, collect and place in self.findifrec.
-        Child classes will use self.findifrec to construct the result
-
-        Raises
-        ------
-        RuntimeError : if not able to find status of jobs during resub attempt
-
+        """ Collect results for all calculations. Resub if necessary and if allowed 
+            This method assumes that we have alredy told optavc to sleep after submitting all of our jobs. If called and
+            jobs have not finished. Keep waiting
         """
 
         check_every = self.cluster.resub_delay(self.options.sleepy_sleep_time)
@@ -148,7 +158,6 @@ class FiniteDifferenceCalc(Calculation):
             else:
 
                 # coder should always add a wait before calling query_cluster
-                time.sleep(self.cluster.wait_time)
                 for itr, calculation in enumerate(self.calculations):
                     finished, _ = self.cluster.query_cluster(self.job_ids[itr])
 
@@ -164,25 +173,96 @@ class FiniteDifferenceCalc(Calculation):
 
             if quit:
                 break
-
+        
         # This code may only be reached if self.collect_failures() is empty. check_status
         # should have been called many times already.
         self.build_findif_dict()
 
-    def compute_result(self):
-        self.sow()
-        self.run()
-        return self.reap()
+
+
+        # # collect failures could be True because we just started or because there are failures present
+        # while self.collect_failures():
+        #     if self.options.resub:
+        #         self.resub(force_resub)
+        #         force_resub=False
+
+        #     # simple get_results
+        #     results = []
+        #     for calc in enumerate(self.calculations):
+        #         if itr == 0:
+        #             results.append(calc.get_result(skip_wait=False))  # first one wait in case of cluster delay
+        #         else:
+        #             # This still waits for the job to finish but does not need to wait fo the cluster to
+        #             # receive the job
+        #             results.append(calc.get_result(skip_wait=True))
+
+        # self.build_findif_dict()    
+
+    # def reap(self, force_resub=False, skip_wait=False):
+    #     """ Once all calculations have finished, collect and place in self.findifrec.
+    #     Child classes will use self.findifrec to construct the result
+
+    #     Raises
+    #     ------
+    #     RuntimeError : if not able to find status of jobs during resub attempt
+
+    #     """
+
+    #     check_every = self.cluster.resub_delay(self.options.sleepy_sleep_time)
+    #     quit = False
+    #     print(f"checking resub option: {self.options.resub}")
+    #     while self.collect_failures():
+    #         if self.options.resub:
+    #             self.resub(force_resub, skip_wait)
+    #             force_resub = False  # only try (at most) 1 forced resubmit
+    #             # use minimum time or user's defined time
+    #             time.sleep(check_every)
+    #         else:
+    #             # coder should always add a wait before calling query_cluster
+    #             if not self.options.job_array:
+    #                 if not skip_wait: 
+    #                     time.sleep(self.cluster.wait_time)
+    #                 for itr, calculation in enumerate(self.calculations):
+    #                     finished, _ = self.cluster.query_cluster(self.job_ids[itr], self.options.job_array)
+    #                     self.collect_failures()
+    #                     if finished and calculation in self.failed:
+    #                         if not calculation.check_status(calculation.options.energy_regex):
+    #                             print(f"Resub has not been turned on. The following jobs are currently marked"
+    #                                   f"as failed: "
+    #                                   f"{[calc.disp_num for calc in self.failed]}"""
+    #                                   f"calculation {itr} - {calculation} has triggered this message") 
+    #                             raise RuntimeError("Jobs have finished but one or more have failed")
+    #                     else:
+    #                         time.sleep(check_every)
+    #             else:
+    #                 if not skip_wait:
+    #                     time.sleep(self.cluster.wait_time)
+    #                 finished, _ = self.cluster.query_cluster(self.job_ids[0], self.options.job_array)
+
+    #                 if finished:
+    #                     for itr, calculation in enumerate(self.calculations):
+    #                         self.collect_failures()
+    #                         if calculation in self.failed:
+    #                             if not calculation.check_status(calculation.options.energy_regex):
+    #                                 print(f"calculation {itr} has failed")
+    #                                 raise RuntimeError(f"array has finished but one or more have failed")
+    #                 else:
+    #                     time.sleep(check_every)
+
+    #     # This code may only be reached if self.collect_failures() is empty. check_status
+    #     # should have been called many times already.
+    #     self.build_findif_dict()
 
     def resub(self, force_resub=False):
         """ Rerun each calculation in self.failed as an individual job. """
-
+            
         if force_resub or self.options.job_array is True:
             # Immediately rerun all failed jobs if calculations were previously submitted as an
             # array OR if performing restart and could not reap.
             # Must fill in job_ids to prevent jobs from being resubmitted on next call of resub
             self.job_ids = [calc.run() for calc in self.failed]
-            print(f"\nJob IDS for forced resubmit\n{self.job_ids}\n")
+            print(f"\nForced resubmit is on. Cannot reap needed calculations")
+            print(f"Job IDS for forced resubmit\n{self.job_ids}\n")
             self.options.job_array = False  # once we've resubmitted once. Turn array off
             return
 
@@ -191,23 +271,14 @@ class FiniteDifferenceCalc(Calculation):
 
         time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
         for job in self.job_ids:
-            try:
-                finished, job_num = self.cluster.query_cluster(job)
-            except RuntimeError:
-                time.sleep(self.cluster.wait_time)
-                finished, job_num = self.cluster.query_cluster(job)
+            
+            finished, job_num = job.cluster.query_cluster(job)
+
             if not finished:
                 # Jobs are only considered for resubmission if the cluster has marked as finished
                 continue
 
-            try:
-                current_calc = self.calculations[job_num - 1]
-                # adjust job_num for zero based counting
-            except IndexError:
-                print("why is this failing now??")
-                print(f"job_number: {job_num}")
-                raise
-
+            current_calc = self.calculations[job_num - 1]  # adjust for zero based
             self.collect_failures()  # refresh list of self.failed
             self.check_resub_count()  # remove calculation from self.failed based on resub_max
 
@@ -225,7 +296,7 @@ class FiniteDifferenceCalc(Calculation):
             self.job_ids.remove(job)
 
         if resubmitting:
-            print("\nThe followin jobs have been resubmitted: ")
+            print("\n\nThe followin jobs have been resubmitted: ")
             print([calc.options.name for calc in resubmitting])
 
     def collect_failures(self, raise_error=False):
@@ -293,7 +364,7 @@ class FiniteDifferenceCalc(Calculation):
                                "allowed resubmissions")
 
     def keys_and_results(self):
-        return [(calc.key, calc.compute_result()) for calc in self.calculations]
+        return [(calc.key, calc.get_result()) for calc in self.calculations]
 
     @abstractmethod
     def build_findif_dict(self):
@@ -305,10 +376,11 @@ class FiniteDifferenceCalc(Calculation):
 
 
 class Gradient(FiniteDifferenceCalc):
+    """Machinary to create inputs and collect results for running a gradient using Singlepoints"""
 
     def __init__(self, molecule, input_obj, options, path):
         super().__init__(molecule, input_obj, options, path)
-        print("Creating correct gradient class") 
+        
         self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         if self.options.point_group is not None:
             self.psi4_mol_obj.reset_point_group(self.options.point_group)
@@ -345,7 +417,7 @@ class Gradient(FiniteDifferenceCalc):
 
         # psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
         grad = self.compute_grad(self.findifrec)
-        self.result = psi4.core.Matrix.from_array(grad)
+        self.result = grad
         return self.result
 
     def findif_methods(self):
@@ -390,6 +462,7 @@ class Gradient(FiniteDifferenceCalc):
 
 
 class Hessian(FiniteDifferenceCalc):
+    """Machinery to create inputs and collect results for a Hessian for any type of AnalyticCalc"""
 
     def __init__(self, molecule, input_obj, options, path):
         super().__init__(molecule, input_obj, options, path)
@@ -411,14 +484,12 @@ class Hessian(FiniteDifferenceCalc):
 
         hess = self.compute_hess(self.findifrec, -1)
         self.result = psi4.core.Matrix.from_array(hess)
-        Hessian.psi4_frequencies(self.psi4_mol_obj, self.result,
-                                 self.findifrec['reference']['energy'])
         return self.result
 
     def get_reference_energy(self):
         
         if self.options.dertype.lower() == 'gradient':
-            return self.calculations[0].get_energy()
+            return self.calculations[0].get_reference_energy()
         else:
             return super().get_reference_energy()
 
@@ -435,25 +506,23 @@ class Hessian(FiniteDifferenceCalc):
 
         # need to prevent the interpreter from seeing methods for the alternate
         # version
-
         if '1.4' in psi_version:
-
-            if self.options.dertype:
+            if self.options.dertype == 'ENERGY':
                 create = psi4.driver_findif.hessian_from_energies_geometries 
                 compute = psi4.driver_findif.assemble_hessian_from_energies
                 constructor = SinglePoint 
             else:
                 create = psi4.driver_findif.hessian_from_gradients_geometries
-                compute = psi4.driver_findif.assemble_hessian_from_energies
+                compute = psi4.driver_findif.assemble_hessian_from_gradients
                 constructor = AnalyticGradient
         else:
-            if self.options.dertype:
+            if self.options.dertype == 'ENERGY':
                 create = psi4.driver_findif.hessian_from_energy_geometries 
                 compute = psi4.driver_findif.compute_hessian_from_energies
                 constructor = SinglePoint 
             else:
                 create = psi4.driver_findif.hessian_from_gradient_geometries
-                compute = psi4.driver_findif.compute_hessian_from_energies
+                compute = psi4.driver_findif.compute_hessian_from_gradients
                 constructor = AnalyticGradient
                 
         return create, compute, constructor
@@ -461,9 +530,7 @@ class Hessian(FiniteDifferenceCalc):
     def build_findif_dict(self):
 
         calc_type = self.options.dertype.lower()
-        print(calc_type)
         for key, result in self.keys_and_results():
-            print(f"key {key} result {result}")             
             if key == 'reference':
                 self.findifrec['reference'][calc_type] = result
                 if calc_type == 'gradient':
@@ -471,19 +538,19 @@ class Hessian(FiniteDifferenceCalc):
             else:
                 self.findifrec['displacements'][key][calc_type] = result
 
-    @staticmethod
-    def psi4_frequencies(psi4_mol_obj, result, energy):
-        # Could we get the global_option basis? Yes.
-        # Would we need to set it, just for this? Yes.
-        # Does it mean anything. No, not with our application.
+    # @staticmethod
+    # def psi4_frequencies(psi4_mol_obj, result, energy):
+    #     # Could we get the global_option basis? Yes.
+    #     # Would we need to set it, just for this? Yes.
+    #     # Does it mean anything. No, not with our application.
 
-        if isinstance(result, np.ndarray):
-            result = psi4.core.Matrix.from_array(result)
+    #     if isinstance(result, np.ndarray):
+    #         result = psi4.core.Matrix.from_array(result)
 
-        wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
-        wfn.set_hessian(result)
-        wfn.set_energy(energy)
-        psi4.core.set_variable("CURRENT ENERGY", energy)
-        psi4.driver.vibanal_wfn(wfn)
-        psi4.driver._hessian_write(wfn)
+    #     wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
+    #     wfn.set_hessian(result)
+    #     wfn.set_energy(energy)
+    #     psi4.core.set_variable("CURRENT ENERGY", energy)
+    #     psi4.driver.vibanal_wfn(wfn)
+    #     psi4.driver._hessian_write(wfn)
 

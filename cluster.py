@@ -53,7 +53,7 @@ class Cluster:
                                  'queue_info': ['qacct', '-j', None],
                                  'job_state': None,
                                  'job_name': r'jobname\s+.*(--\d*)?-(\d*)',
-                                 'job_id': r'Your\s*job\s*(\d*)',
+                                 'job_id': r'Your\s*job(?:-array)?\s*(\d*)',
                                  'resub_delay': lambda sleep: max(10, sleep),
                                  'wait_time': 5},
                       'SAPELO_OLD': {'submit': 'qsub',
@@ -108,7 +108,7 @@ class Cluster:
         text_output = process.stdout
         return self.get_job_id(text_output, options.job_array)
 
-    def query_cluster(self, job_id):
+    def query_cluster(self, job_id, job_array=True):
         """ use subprocess to get detailed information on a single job. output must be interpreted
         in cluster by cluster basis.
 
@@ -139,8 +139,12 @@ class Cluster:
             raise RuntimeError(f"Error encountered trying to run {' '.join(self.queue_info)}")
 
         output = process.stdout
-        job_number = self.get_job_number(output)
         job_state = self.job_finished(output)
+        
+        if not job_array:
+            job_number = self.get_job_number(output)
+        else:
+            job_number = None
 
         return job_state, job_number
 

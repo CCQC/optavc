@@ -63,11 +63,48 @@ class Calculation(ABC):
 
     @abstractmethod
     def run(self):
+        """Standalone method. Implementations for child classes should simply move to the 
+        correct directory and execture the submission script. Enables higher level classes
+        to run AnalyticCalculation classes in parallel 
+        
+        Returns
+        -------
+        Union[str, list[str]]: output from submission or list of outputs from submissions
+
+        """
         pass
+
+    @abstractmethod
+    def get_result(self, force_resub=False, skip_wait=False):
+        """getter for the final result of a Calculation. Run or compute_result must already have 
+        been executed """
+        pass
+
+    @abstractmethod
+    def write_input(self):
+        pass
+
+    def compute_result(self):
+        """Wrapper method to run a calculation from scratch. Write inputs. Run calculations. 
+        Collect results for any and all Calculations 
+        AnalyticCalc and FindifCalc reimplement this with better ways to wait. The Procedure class
+        does simply inherit this.
+        """ 
+        self.write_input()
+        self.run()
+        time.sleep(40)
+        return self.get_result()
 
 
 class AnalyticCalc(Calculation):
+    """Parent class for the two real types of calculations that can be run. All other child classes will have one or
+    more instances of AnalyticCalc. 
     
+    This class contains the necessary code to perform the actual execution of Gradients and Singlepoints.
+    For result collection please see AnalyticGradient and Singlepoint child classes
+
+    """
+
     def __init__(self, molecule, inp_file_obj, options, path=".", key=None):
         super().__init__(molecule, options, path, key)
         self.inp_file_obj = inp_file_obj
@@ -78,6 +115,8 @@ class AnalyticCalc(Calculation):
             self.cluster = None
         else:
             self.cluster = Cluster(self.options.cluster)
+
+        self.job_num = None
 
     def run(self):
         """ Change to singlepoint directory. Effect is to invoke subprocess 
@@ -149,7 +188,6 @@ class AnalyticCalc(Calculation):
         """
 
         output_path = os.path.join(self.path, self.options.output_name)
-
         try:
             with open(output_path) as f:
                 output_text = f.read()
@@ -160,14 +198,33 @@ class AnalyticCalc(Calculation):
             raise
         else:
             check = re.search(r'^' + status_str, output_text, re.MULTILINE)
-
             if return_text:
                 return check, output_text
             return check
 
-    @abstractmethod
-    def get_result(self):
-        pass
+    def wait_for_calculation(self):
+
+        wait = True
+        while wait:
+            try:
+                finished, job_num = self.cluster.query_cluster(self.job_num, self.options.job_array)
+            except RuntimeError:
+                time.sleep(10)
+                finished, job_num = self.cluster.query_cluster(self.job_num, self.options.job_array)
+
+            if finished:
+                status = self.check_status(self.options.energy_regex)
+                wait = False
+            else:
+                time.sleep(self.cluster.resub_delay(self.options.sleepy_sleep_time))
+
+        return finished, job_num
+
+    def compute_result(self):
+        self.write_input()
+        self.run()
+        self.wait_for_calculation()
+        return self.get_result()
 
     def _get_energy_float(self, regex_str, output_text):
         try:
@@ -181,23 +238,22 @@ class AnalyticCalc(Calculation):
                 raise ValueError(f"Could not find energy for singlepoint {self.disp_num} using "
                                  f" {regex_str}")
 
-
 class SinglePoint(AnalyticCalc):
+    """ Handles lookup of the result for a Singlepoint """
 
+    
     def __init__(self, molecule, inp_file_obj, options, path=".", disp_num=1, key=None):
         super().__init__(molecule, inp_file_obj, options, path, key)
         self.disp_num = disp_num
         self.file_not_found_behavior = f"Could not open output file for singlepoint: {self.disp_num}"
 
     def get_result(self):
-        """ Use regex module to find and return energy with any necessary corrections
+        """ Use regex module to find and return energy with any necessary corrections"""
 
-        Notes
-        -----
-        Ignores ValueError from _get_energy_float since success string should be found
-        before this method is every called.
-
-        """
+        if not self.check_status(self.options.energy_regex):
+            return None 
+            # raise RuntimeError(f"Calculation {name} finished but could not get result using"
+            #                    f"regex: {self.options.energy_regex}")
 
         output_path = os.path.join(self.path, self.options.output_name)
         
@@ -245,12 +301,14 @@ class SinglePoint(AnalyticCalc):
 class AnalyticGradient(AnalyticCalc):
     """ This class was implemented in order to use CFour's analytic gradients with the psi4 CBS
     procedure. CCSD(T) gradients from CFour are not available through the Psi4/CFour interface.
+    
+    Handles the lookup of output from a Gradient calculation. Adds the ability to wait for a calculation
+    to finish on the cluster before getting a result. 
+
     """
 
     def __init__(self, molecule, inp_file_obj, options, disp_num=None, path=".", key=None):
         super().__init__(molecule, inp_file_obj, options, path, key)
-
-        print(self.path)
 
         not_found = "Gradient calculation has failed."
 
@@ -260,22 +318,15 @@ class AnalyticGradient(AnalyticCalc):
             self.file_not_found_behavior = not_found
         
         self.disp_num = disp_num 
-        self.job_num = None
 
-    def compute_result(self):
-        self.write_input()
-        self.job_num = self.run()
-        print(f"checking for correct working dir: {os.getcwd()}")
-        return self.get_result()
+    # def reap(self, force_resub):
+    #     """ force_resub is only here to match interface for findifcalc resub
+    #     reap is only called from optimization when gradient is expected to
+    #     have already finished """
 
-    def reap(self, force_resub):
-        """ force_resub is only here to match interface for findifcalc resub
-        reap is only called from optimization when gradient is expected to
-        have already finished """
+    #     return self.get_result(skip_wait=False)
 
-        return self.get_result(wait=False)
-
-    def get_result(self, wait=True):
+    def get_result(self, force_resub=False):
         """ Gets the gradient according to method specified by user
     
         Returns
@@ -284,28 +335,15 @@ class AnalyticGradient(AnalyticCalc):
             shape: (natom, 3)
     
         """
-        
-        # if self.options.gradient_file:
-        #     with open(f'{self.path}/{gradient_file}') as f:
-        #         grad_str = f.readlines()
-        # else:
-       
-        # delay until our gradient is no longer on the cluster's queue
-        time.sleep(self.cluster.wait_time)
-        while wait:
-            try:
-                print(self.job_num)
-                finished, job_num = self.cluster.query_cluster(self.job_num)
-            except RuntimeError:
-                time.sleep(10)
-                finished, job_num = self.cluster.query_cluster(self.job_num)
 
-            if finished:
-                status = self.check_status(self.options.energy_regex)
-                wait = False
-            else:
-                time.sleep(self.cluster.resub_delay(self.options.sleepy_sleep_time))
+        if force_resub:
+            if not self.check_status(self.options.energy_regex):
+                self.run()
 
+        if not self.check_status(self.options.energy_regex):
+            raise RuntimeError(f"Calculation {name} finished but could not get result using"
+                               f"regex: {self.options.energy_regex}")
+ 
         output_path = os.path.join(self.path, self.options.output_name)
         
         with open(output_path) as f:
@@ -315,8 +353,8 @@ class AnalyticGradient(AnalyticCalc):
         label_xyz = r"(\s*.*(\s*-?\d+\.\d+){3})+"
         regex = self.options.gradient_regex + label_xyz
         grad_str = re.search(regex, output).group()
-        
-        return self.str_to_psi4mat(grad_str)
+ 
+        return self.str_to_ndarray(grad_str)
 
     def get_reference_energy(self):
         """ Get reference energy from gradient calculation
@@ -334,7 +372,7 @@ class AnalyticGradient(AnalyticCalc):
     
         return self._get_energy_float(self.options.energy_regex, output) 
 
-    def str_to_psi4mat(self, grad_output):
+    def str_to_ndarray(self, grad_output):
         """ Take string with possible header from the output file or a specified gradient file
         and convert to psi4 matrix
         
@@ -348,4 +386,4 @@ class AnalyticGradient(AnalyticCalc):
         # last lines in string. Assumes dE/dx, ... values are the last lines in string
         twoD_grad_str = [line.split()[-3:] for line in grad_lines[-self.molecule.natom:]]
         twoD_grad = np.asarray(twoD_grad_str).astype(float)
-        return Matrix.from_array(twoD_grad)
+        return twoD_grad

@@ -1,6 +1,7 @@
 import psi4
 import os
 import socket
+import copy
 from typing import Union
 
 # from .dask_iface import connect_Client
@@ -30,7 +31,7 @@ class Options(object):
         self.memory = kwargs.pop("memory", "32GB")
         self.name = kwargs.pop("name", "STEP")
 
-        # self.files_to_copy = kwargs.pop("files_to_copy", [])
+        self.files_to_copy = kwargs.pop("files_to_copy", [])
         self.input_name = kwargs.pop("input_name", "input.dat")
         self.output_name = kwargs.pop("output_name", "output.dat")
         self.input_units = kwargs.pop("input_units", "angstrom")
@@ -41,6 +42,7 @@ class Options(object):
         self.mpi = kwargs.pop("mpi", None)
         self.job_array = kwargs.pop("job_array", False)
         self.resub = kwargs.pop("resub", False)
+        self.resub_max = kwargs.pop("resub_max", None)
         self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
@@ -48,7 +50,6 @@ class Options(object):
 
         # options for running optimizations using xtpl procedure
         self.xtpl = None
-
         self.xtpl_basis_sets = kwargs.pop("xtpl_basis_sets", None)  # REQUIRED
         self.xtpl_templates = kwargs.pop("xtpl_templates", None)  # REQUIRED
         self.xtpl_regexes = kwargs.pop("xtpl_regexes", None)  # REQUIRED
@@ -61,7 +62,9 @@ class Options(object):
         self.xtpl_parallels = kwargs.pop("xtpl_parallels", None)  # NON XTPL DEFAULT
         self.xtpl_time_limits = kwargs.pop("xtpl_time_limits", None)  # NON XTPL DEFAULT
         self.xtpl_scratches = kwargs.pop("xtpl_scratches", None)  # NON XTPL DEFAULT
+        self.scf_xtpl = kwargs.pop("scf_xtpl", False)
         self.enforce_xtpl_option_consistency()
+
 
         # options for calculations with corrections (correlation correction, relativistic, etc)
         self.delta = None
@@ -221,7 +224,6 @@ class Options(object):
         if val is None:
             self._dertype = 'ENERGY'
         elif isinstance(val, str):
-            print(val.upper())
             if val.upper() in dertypes:
                 self._dertype = val.upper()
             else:
@@ -233,14 +235,25 @@ class Options(object):
             raise ValueError("Unable to determine type of calculation (dertype)")
 
     @property
+    def resub_max(self):
+        return self._resub_max
+
+    @resub_max.setter
+    def resub_max(self, val):
+        if not self.resub:
+            self._resub_max = 0
+        else:
+            self._resub_max = val
+
+    @property
     def xtpl_templates(self):
-        return self.xtpl_templates
+        return self._xtpl_templates
 
     @xtpl_templates.setter
     def xtpl_templates(self, val):
         if val is not None:
             Options.check_xtpl_format(val, "xtpl_templates")
-        self.xtpl_templates = val
+        self._xtpl_templates = val
 
     @property
     def xtpl_regexes(self):
@@ -268,10 +281,10 @@ class Options(object):
 
     @xtpl_programs.setter
     def xtpl_programs(self, val):
-        if not val or self.program:
+        if not val and not self.program:
             raise ValueError("No program provided in xtpl_programs. Can not fall back to "
                              "standard program option")
-        Options.xtpl_setter_helper(val, "xtpl_programs")
+        val = Options.xtpl_setter_helper(val, self.program, "xtpl_programs")
         self._xtpl_program = val
 
     @property
@@ -280,16 +293,52 @@ class Options(object):
 
     @xtpl_names.setter
     def xtpl_names(self, val):
-        if not val:
-            names = [['large_c', 'intermed_c', 'small_c'],
-                     ['large_ref', 'intermed_ref', 'small_ref']]
-            if len(self.xtpl_basis_sets[0]) == 0:
-                names.pop(1)
-            if len(self.xtpl_basis_sets[1]) == 0:
-                names.pop(1)
+        
+        if self.xtpl_templates is None:
+            self._xtpl_names = None
+
+        elif not val:
+            tmp = [['large_c', 'intermed_c', 'small_c'],
+                   ['large_ref', 'intermed_ref', 'small_ref']]
+            
+            if len(self.xtpl_basis_sets[0]) == 2:
+                tmp[0].pop(1)
+            else:
+               raise ValueError("Too many entries for xtpl_basis_sets[0]. Psi4 only has"
+                                "implemented two point extrapolation")
+
+
+            # make sure there aren't too many names for the basis set
+            # extrapolation being performed
+            while len(self.xtpl_basis_sets[1]) < len(tmp[1]):
+                tmp[1].pop(1)
+
+            # unique names should only appear for unique templates
+            names = [[''] * len(self.xtpl_templates[0]), [''] * len(self.xtpl_templates[1])]
+            
+            templates_seen = []
+            for xtpl_set_itr, xtpl_set in enumerate(self.xtpl_templates):
+                for template_itr, template_val in enumerate(xtpl_set):
+                    # assign matches if not previously seen. use index from first match found
+                    # look in the same set on inputs first. If get index from the preceeding set
+                    # only two sets so (xtpl_set_itr - 1) should never go negative.
+                    if not template_val in templates_seen:
+                        templates_seen.append(template_val)
+                        names[xtpl_set_itr][template_itr] = tmp[xtpl_set_itr][template_itr]
+                    else:
+                        safe_template_itr = Options.safe_itr(template_itr)
+                        if template_val in xtpl_set[:safe_template_itr]:
+                            index = xtpl_set.index(template_val)
+                            names[xtpl_set_itr][template_itr] = tmp[xtpl_set_itr][index]
+                        else:
+                            safe_xtpl_itr = Options.safe_itr(xtpl_set_itr)
+                            # already seen. item must be in previous set
+                            index = self.xtpl_templates[safe_xtpl_itr].index(template_val)
+                            names[xtpl_set_itr][template_itr] = tmp[safe_xtpl_itr][index]
+            val = names
         else:
             val = Options.xtpl_setter_helper(val, "xtpl_names")
-
+        print(val)
         self._xtpl_names = val
 
     @property
@@ -298,7 +347,7 @@ class Options(object):
 
     @xtpl_nslots.setter
     def xtpl_nslots(self, val):
-        Options.xtpl_setter_helper(val, "xtpl_nslots")
+        val = Options.xtpl_setter_helper(val, self.nslots, "xtpl_nslots", int_allowed=True)
         self._xtpl_nslots = val
 
     @property
@@ -307,7 +356,8 @@ class Options(object):
 
     @xtpl_dertypes.setter
     def xtpl_dertypes(self, val):
-        val = Options.xtpl_setter_helper(val, "xtpl_dertypes")
+        print(f"self.dertypes is: {self.dertype}")
+        val = Options.xtpl_setter_helper(val, self.dertype, "xtpl_dertypes")
         self._xtpl_derivs = val
 
     @property
@@ -316,7 +366,7 @@ class Options(object):
 
     @xtpl_queues.setter
     def xtpl_queues(self, val):
-        val = Options.xtpl_setter_helper(val, "xtpl_queues")
+        val = Options.xtpl_setter_helper(val, self.queue, "xtpl_queues")
         self._xtpl_queues = val
 
     @property
@@ -325,7 +375,7 @@ class Options(object):
 
     @xtpl_memories.setter
     def xtpl_memories(self, val):
-        val = Options.xtpl_setter_helper(val, "xtpl_memories")
+        val = Options.xtpl_setter_helper(val, self.memory,  "xtpl_memories")
         self._xtpl_memory = val
 
     @property
@@ -334,7 +384,7 @@ class Options(object):
 
     @xtpl_parallels.setter
     def xtpl_parallels(self, val):
-        val = Options.xtpl_setter_helper(val, "xtpl_parallels")
+        val = Options.xtpl_setter_helper(val, self.parallel, "xtpl_parallels")
         self._xtpl_parallel = val
 
     @property
@@ -343,17 +393,17 @@ class Options(object):
 
     @xtpl_time_limits.setter
     def xtpl_time_limits(self, val):
-        val = Options.xtpl_setter_helper(val, "xtpl_time_limits")
+        val = Options.xtpl_setter_helper(val, self.time_limit, "xtpl_time_limits")
         self._xtpl_time_limit = val
 
     @property
     def xtpl_scratches(self):
-        return self._xtpl_time_limit
+        return self._xtpl_scratches
 
     @xtpl_scratches.setter
     def xtpl_scratches(self, val):
-        val = Options.xtpl_setter_helper(val, "xtpl_scratches")
-        self._xtpl_scratch = val
+        val = Options.xtpl_setter_helper(val, self.scratch, "xtpl_scratches")
+        self._xtpl_scratches = val
 
     @property
     def delta_regexes(self):
@@ -364,7 +414,7 @@ class Options(object):
         if val is not None:
             Options.check_delta_format(val, "delta_regexes")
             Options.check_option_dtype(val, "delta_regexes", False)
-            self._delta_regexes = val
+        self._delta_regexes = val
 
     @property
     def delta_templates(self):
@@ -373,7 +423,6 @@ class Options(object):
     @delta_templates.setter
     def delta_templates(self, val):
         if val is not None:
-            self.delta = True
             Options.check_delta_format(val, "delta_templates")
             Options.check_option_dtype(val, "delta_templates", False)
         self._delta_templates = val
@@ -384,10 +433,10 @@ class Options(object):
 
     @delta_programs.setter
     def delta_programs(self, val):
-        if not val or self.program:
+        if not val and not self.program:
             raise ValueError("No program provided for delta_programs or program. Cannot proceed")
         else:
-            val = self.delta_setter_helper(val, "delta_programs")
+            val = self.delta_setter_helper(val, self.program, "delta_programs")
         self._delta_programs = val
 
     @property
@@ -396,7 +445,7 @@ class Options(object):
 
     @delta_dertypes.setter
     def delta_dertypes(self, val):
-        val = self.delta_setter_helper(val, "delta_dertypes")
+        val = self.delta_setter_helper(val, self.dertype, "delta_dertypes")
         self._delta_derivs = val
 
     @property
@@ -405,7 +454,7 @@ class Options(object):
 
     @delta_queues.setter
     def delta_queues(self, val):
-        val = self.delta_setter_helper(val, "delta_queues")
+        val = self.delta_setter_helper(val, self.queue, "delta_queues")
         self._delta_queues = val
 
     @property
@@ -414,10 +463,36 @@ class Options(object):
 
     @delta_names.setter
     def delta_names(self, val):
-        if not val:
-            val = [[f'delta_{itr}', f'ref_{itr}'] for itr in range(len(self.delta_templates))]
+        
+        if self.delta_templates is None:
+            pass
+        elif not val:
+            tmp = [[f'delta_{itr}', f'ref_{itr}'] for itr in range(len(self.delta_templates))]
+            
+            val = copy.deepcopy(self.delta_templates)
+            for sublist in val:
+                for itr, item in enumerate(sublist):
+                    sublist[itr] = ''
+
+            templates_seen = []
+            print(self.delta_templates)
+            for delta_itr, delta_set in enumerate(self.delta_templates):
+                for template_itr, template in enumerate(delta_set):
+                    if template not in templates_seen:
+                        templates_seen.append(template)
+                        val[delta_itr][template_itr] = tmp[delta_itr][template_itr]
+                    elif template in delta_set:
+                        index = delta_set.index(template)
+                        val[delta_itr][template_itr] = tmp[delta_tr][index]
+                    else:
+                        for prev_itr, prev_set in enumerate(self.delta_temples[:delta_set]):
+                            if template in prev_set:
+                                index = prev_set.index(template)
+                                val[delta_itr][template_itr] = tmp[prev_itr][index]
+                                break
         else:
             val = self.delta_setter_helper(val, "delta_names")
+        print(val)
         self._delta_names = val
 
     @property
@@ -427,7 +502,7 @@ class Options(object):
     @delta_nslots.setter
     def delta_nslots(self, val):
 
-        val = self.delta_setter_helper(val, "delta_nslots", int_allowed=True)
+        val = self.delta_setter_helper(val, self.nslots, "delta_nslots", int_allowed=True)
         self._delta_nslots = val
 
     @property
@@ -436,7 +511,7 @@ class Options(object):
 
     @delta_memories.setter
     def delta_memories(self, val):
-        val = self.delta_setter_helper(val, "delta_memories")
+        val = self.delta_setter_helper(val, self.memory, "delta_memories")
         self._delta_memory = val
 
     @property
@@ -445,7 +520,7 @@ class Options(object):
 
     @delta_parallels.setter
     def delta_parallels(self, val):
-        val = self.delta_setter_helper(val, "delta_parallels")
+        val = self.delta_setter_helper(val, self.parallel, "delta_parallels")
         self._delta_parallel = val
 
     @property
@@ -454,7 +529,7 @@ class Options(object):
 
     @delta_time_limits.setter
     def delta_time_limits(self, val):
-        val = self.delta_setter_helper(val, "delta_time_limits")
+        val = self.delta_setter_helper(val, self.time_limit, "delta_time_limits")
         self._delta_time_limit = val
 
     @property
@@ -463,7 +538,7 @@ class Options(object):
 
     @delta_scratches.setter
     def delta_scratches(self, val):
-        val = self.delta_setter_helper(val, "delta_scratches")
+        val = self.delta_setter_helper(val, self.scratch, "delta_scratches")
         self._delta_scratch = val
 
     def enforce_xtpl_option_consistency(self):
@@ -478,25 +553,28 @@ class Options(object):
                     print("ERROR: either none or all of the following options must be set"
                           "xtpl_tempaltes, xtpl_regexes, xtpl_dertypes, and xtpl_basis_sets")
                     raise ValueError("Not all xtpl_options have been set ")
+            return
+        else:
+            self.xtpl = True
 
         xtpl_additions = [self.xtpl_scratches, self.xtpl_parallels, self.xtpl_names,
                           self.xtpl_dertypes, self.xtpl_memories, self.xtpl_programs,
-                          self.xtpl_nslots, self.xtpl_time_limits]
+                          self.xtpl_nslots, self.xtpl_queues, self.xtpl_time_limits]
         xtpl_options = xtpl_options + xtpl_additions
+
 
         if len(self.xtpl_dertypes[0]) != len(self.xtpl_dertypes[1]) and 0 in self.xtpl_dertypes[0]:
             raise ValueError("Analytic gradients requested but the number of HF gradients does not"
                              "match the number of correlated gradients.")
 
-        for itr, template_set in enumerate(self.xtpl_templates):
-            if len(template_set) == 1 and len(self.xtpl_regexes[itr]) == 1:
-                raise ValueError(f"Cannot perform an extrapolation if xtpl_templates and "
-                                 "xtpl_regexes both contain only one entry for index: {itr}")
+        if len(self.xtpl_regexes[0]) == 1 and len(self.xtpl_templates[0]) == 1:
+            raise ValueError(f"Cannot perform an extrapolation if xtpl_templates and "
+                             "xtpl_regexes both contain only one entry for correlated calculations")
 
         # pad options out to two or three entries if necessary
-        for option in xtpl_options[1]:
+        for option in xtpl_options:
 
-            Options.pad_options_to_x_point_xtpl(option, self.xtpl_dertypes)
+            Options.pad_options_to_x_point_xtpl(option, self.xtpl_basis_sets)
 
             if len(option[0]) != len(self.xtpl_basis_sets[0]):
                 raise ValueError(f"unable to fill out the options {option} to match the desired"
@@ -510,14 +588,18 @@ class Options(object):
             raise ValueError("Did not provide delta_regexes")
         elif self.delta_regexes is None and self.delta_templates:
             raise ValueError("Did not provide delta_templates")
+        elif self.delta_templates is None and self.delta_regexes is None:
+            return
+        else:
+            self.delta = True
 
         for itr, template_set in enumerate(self.delta_templates):
             if len(template_set) == 1 and len(self.delta_regexes[itr]) == 1:
                 raise ValueError("If only one template is provided. Two regexes must be provided")
 
-        delta_options = [self.delta_programs, self.delta_queues, self.delta_nslots,
+        delta_options = [self.delta_templates, self.delta_programs, self.delta_queues, self.delta_nslots,
                          self.delta_memories, self.delta_dertypes, self.delta_scratches,
-                         self.delta_parallels, self.delta_time_limits]
+                         self.delta_parallels, self.delta_time_limits, self.delta_names]
 
         # ensure all options have two entries for each list, copying if necessary
         # under assumption user would like an option to apply to both calculations
@@ -540,7 +622,6 @@ class Options(object):
         # Pad out to 2 or 3. i.e. if xtpl_templates = [['template1'], ['template2']]
         # for a two point extrapolation xtpl_templates will become:
         # [['template1', 'template1'], ['template2', 'template2']]
-
         for itr, xtpl_set in enumerate(options):
             if len(xtpl_set) == 1:
                 x_point_xtpl = len(template[itr])
@@ -555,21 +636,25 @@ class Options(object):
                     continue
                 elif int_allowed and isinstance(item, int):
                     continue
-                elif not item:
+                elif item is None:
                     continue
                 else:
                     raise ValueError(f"{options_str} should be a list[list[string]]")
 
     @staticmethod
-    def xtpl_setter_helper(val, opt_name, int_allowed=False):
+    def xtpl_setter_helper(val, default=None, opt_name="", int_allowed=False):
         """ For an xtpl option that has a default provided by the options standard version check
         that formatting is of the type [[options], [options]] or broadcast a single option to the
         that format. Then check that the option is of the appropriate type (None, str) """
 
+        if val is None:
+            val = default
+        
         if isinstance(val, list):
             Options.check_xtpl_format(val, opt_name)
         else:
             val = [[val], [val]]
+
         Options.check_option_dtype(val, opt_name, int_allowed)
         return val
 
@@ -592,14 +677,20 @@ class Options(object):
                     raise ValueError(f"The entry in {opt_name} for reference energy"
                                      "extrapolation must contain 1, 2, or 3 strings")
 
-    def delta_setter_helper(self, val, opt_name, int_allowed=False):
+    def delta_setter_helper(self, val, default=None, opt_name="", int_allowed=False):
         """ Ensure lists obey delta formatting and data types. Broadcast non iterable inputs
         to the delta format """
+
+        if val is None:
+            val = default
 
         if isinstance(val, list):
             Options.check_delta_format(val, opt_name)
         else:
-            val = [[val] * len(self.delta_templates)]
+            try:
+                val = [[val] * len(self.delta_templates)]
+            except TypeError:
+                return val
         Options.check_option_dtype(val, opt_name, int_allowed)
         return val
 
@@ -639,3 +730,10 @@ class Options(object):
                                                                                          str(value)))
             else:
                 raise Exception("Unrecognized keyword {:s}".format(str(key)))
+
+    @staticmethod
+    def safe_itr(option_itr):
+        if option_itr - 1 < 0:
+            return 0
+        else:
+            return option_itr - 1
