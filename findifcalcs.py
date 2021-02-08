@@ -272,7 +272,7 @@ class FiniteDifferenceCalc(Calculation):
         time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
         for job in self.job_ids:
             
-            finished, job_num = job.cluster.query_cluster(job)
+            finished, job_num = self.cluster.query_cluster(job)
 
             if not finished:
                 # Jobs are only considered for resubmission if the cluster has marked as finished
