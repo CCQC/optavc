@@ -537,6 +537,7 @@ class Hessian(FiniteDifferenceCalc):
                 self.findifrec['reference'][calc_type] = result
                 if calc_type == 'gradient':
                     self.findifrec['reference']['energy'] = self.get_reference_energy()
+                self.energy = self.get_reference_energy()  # for use in main.py
             else:
                 self.findifrec['displacements'][key][calc_type] = result
 
