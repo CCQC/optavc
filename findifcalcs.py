@@ -168,7 +168,7 @@ class FiniteDifferenceCalc(Calculation):
                                   f"{[calc.disp_num for calc in self.failed]}"""
                                   f"calculation {itr} - {calculation} has triggered this message") 
                             raise RuntimeError("Jobs have finished but one or more have failed")
-                    else:
+                    elif not finished:
                         time.sleep(check_every)
 
             if quit:
