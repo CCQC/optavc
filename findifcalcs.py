@@ -269,11 +269,13 @@ class FiniteDifferenceCalc(Calculation):
         eliminations = []
         resubmitting = []
 
-        time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
+        print("preparing to loop over jobs ids")
+        print(self.job_ids)
+        # time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
         for job in self.job_ids:
             
             finished, job_num = self.cluster.query_cluster(job)
-
+            print(f"for job: {job}. state is {finished}. job_num is {job_num}")
             if not finished:
                 # Jobs are only considered for resubmission if the cluster has marked as finished
                 continue
