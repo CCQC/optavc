@@ -203,7 +203,7 @@ class AnalyticCalc(Calculation):
             return check
 
     def wait_for_calculation(self):
-
+ 
         wait = True
         while wait:
             try:
@@ -223,6 +223,7 @@ class AnalyticCalc(Calculation):
     def compute_result(self):
         self.write_input()
         self.run()
+        time.sleep(self.cluster.wait_time)
         self.wait_for_calculation()
         return self.get_result()
 
