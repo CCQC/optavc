@@ -140,7 +140,7 @@ class AnalyticCalc(Calculation):
             output = 0  # don't need to return job_id
         else:
             output = self.cluster.submit(self.options)
-
+            self.job_num = output
         os.chdir(working_directory)
         return output
 
