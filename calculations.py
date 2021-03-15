@@ -143,7 +143,7 @@ class AnalyticCalc(Calculation):
             output = 0  # don't need to return job_id
         else:
             output = self.cluster.submit(self.options)
-
+            self.job_num = output
         os.chdir(working_directory)
         self.job_num = output
         return output
@@ -207,7 +207,7 @@ class AnalyticCalc(Calculation):
             return check
 
     def wait_for_calculation(self):
-
+ 
         wait = True
         while wait:
             try:
@@ -227,6 +227,7 @@ class AnalyticCalc(Calculation):
     def compute_result(self):
         self.write_input()
         self.run()
+        time.sleep(self.cluster.wait_time)
         self.wait_for_calculation()
         return self.get_result()
 

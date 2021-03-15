@@ -168,7 +168,7 @@ class FiniteDifferenceCalc(Calculation):
                                   f"{[calc.disp_num for calc in self.failed]}"""
                                   f"calculation {itr} - {calculation} has triggered this message") 
                             raise RuntimeError("Jobs have finished but one or more have failed")
-                    else:
+                    elif not finished:
                         time.sleep(check_every)
 
             if quit:
@@ -269,11 +269,13 @@ class FiniteDifferenceCalc(Calculation):
         eliminations = []
         resubmitting = []
 
-        time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
+        print("preparing to loop over jobs ids")
+        print(self.job_ids)
+        # time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
         for job in self.job_ids:
             
             finished, job_num = self.cluster.query_cluster(job)
-
+            print(f"for job: {job}. state is {finished}. job_num is {job_num}")
             if not finished:
                 # Jobs are only considered for resubmission if the cluster has marked as finished
                 continue
@@ -535,6 +537,7 @@ class Hessian(FiniteDifferenceCalc):
                 self.findifrec['reference'][calc_type] = result
                 if calc_type == 'gradient':
                     self.findifrec['reference']['energy'] = self.get_reference_energy()
+                self.energy = self.get_reference_energy()  # for use in main.py
             else:
                 self.findifrec['displacements'][key][calc_type] = result
 
