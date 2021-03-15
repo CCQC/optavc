@@ -13,7 +13,7 @@ class Options(object):
         self.template_file_path = kwargs.pop("template_file_path", "template.dat")
         self.energy_regex = kwargs.pop("energy_regex", "")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
-        self.gradient_regex = kwargs.pop("gradient_regex", None)
+        self.deriv_regex = kwargs.pop("deriv_regex", None)
         # self.success_regex = kwargs.pop("success_regex", "")
         # self.fail_regex = kwargs.pop("fail_regex", "")
 
@@ -30,6 +30,7 @@ class Options(object):
         self.email_opts = kwargs.pop("email_opts", 'END,FAIL')
         self.memory = kwargs.pop("memory", "32GB")
         self.name = kwargs.pop("name", "STEP")
+        self.hessian_file = kwargs.pop("hessian_file", 'output')
 
         self.files_to_copy = kwargs.pop("files_to_copy", [])
         self.input_name = kwargs.pop("input_name", "input.dat")
@@ -63,8 +64,9 @@ class Options(object):
         self.xtpl_time_limits = kwargs.pop("xtpl_time_limits", None)  # NON XTPL DEFAULT
         self.xtpl_scratches = kwargs.pop("xtpl_scratches", None)  # NON XTPL DEFAULT
         self.scf_xtpl = kwargs.pop("scf_xtpl", False)
+        self.xtpl_deriv_regexes = kwargs.pop("xtpl_deriv_regexes", None)
+        self.xtpl_hessian_files = kwargs.pop("xtpl_hessian_files", None)
         self.enforce_xtpl_option_consistency()
-
 
         # options for calculations with corrections (correlation correction, relativistic, etc)
         self.delta = None
@@ -79,6 +81,8 @@ class Options(object):
         self.delta_parallels = kwargs.pop("delta_parallels", None)  # NON DELTA DEFAULT
         self.delta_time_limits = kwargs.pop("delta_time_limits", None)  # NON DELTA DEFAULT
         self.delta_scratches = kwargs.pop("delta_scratches", None)  # NON DELTA DEFAULT
+        self.delta_deriv_regexes = kwargs.pop("delta_deriv_regexes", None)
+        self.delta_hessian_files = kwargs.pop("delta_hessian_files", None)
         self.enforce_delta_options_consistency()
 
         if self.mpi is not None:
@@ -219,7 +223,7 @@ class Options(object):
     @dertype.setter
     def dertype(self, val):
 
-        dertypes = ['ENERGY', 'GRADIENT']
+        dertypes = ['ENERGY', 'GRADIENT', 'HESSIAN']
 
         if val is None:
             self._dertype = 'ENERGY'
@@ -228,7 +232,7 @@ class Options(object):
                 self._dertype = val.upper()
             else:
                 raise ValueError("Unable to determine type of calculation (dertype)")
-        elif val in [0, 1]:
+        elif val in [0, 1, 2]:
             self._dertype = dertypes[val]
         else:
             self._dertype = 'ENERGY'
@@ -352,13 +356,13 @@ class Options(object):
 
     @property
     def xtpl_dertypes(self):
-        return self._xtpl_derivs
+        return self._xtpl_dertypes
 
     @xtpl_dertypes.setter
     def xtpl_dertypes(self, val):
         print(f"self.dertypes is: {self.dertype}")
         val = Options.xtpl_setter_helper(val, self.dertype, "xtpl_dertypes")
-        self._xtpl_derivs = val
+        self._xtpl_dertypes = val
 
     @property
     def xtpl_queues(self):
@@ -397,6 +401,15 @@ class Options(object):
         self._xtpl_time_limit = val
 
     @property
+    def xtpl_deriv_regexes(self):
+        return self._xtpl_deriv_regexes
+
+    @xtpl_deriv_regexes.setter
+    def xtpl_deriv_regexes(self, val):
+        val = Options.xtpl_setter_helper(val, self.deriv_regex, "xtpl_deriv_regexes")
+        self._xtpl_deriv_regexes = val
+
+    @property
     def xtpl_scratches(self):
         return self._xtpl_scratches
 
@@ -404,6 +417,15 @@ class Options(object):
     def xtpl_scratches(self, val):
         val = Options.xtpl_setter_helper(val, self.scratch, "xtpl_scratches")
         self._xtpl_scratches = val
+
+    @property
+    def xtpl_hessian_files(self):
+        return self._xtpl_hessian_files
+    
+    @xtpl_hessian_files.setter
+    def xtpl_hessian_files(self, val):
+        val = Options.xtpl_setter_helper(val, self.hessian_file, "xtpl_setter_helper")
+        self._xtpl_hessian_files = val
 
     @property
     def delta_regexes(self):
@@ -441,12 +463,12 @@ class Options(object):
 
     @property
     def delta_dertypes(self):
-        return self._delta_derivs
+        return self._delta_dertypes
 
     @delta_dertypes.setter
     def delta_dertypes(self, val):
         val = self.delta_setter_helper(val, self.dertype, "delta_dertypes")
-        self._delta_derivs = val
+        self._delta_dertypes = val
 
     @property
     def delta_queues(self):
@@ -456,6 +478,15 @@ class Options(object):
     def delta_queues(self, val):
         val = self.delta_setter_helper(val, self.queue, "delta_queues")
         self._delta_queues = val
+
+    @property
+    def delta_hessian_files(self):
+        return self._delta_hessian_files
+
+    @delta_hessian_files.setter
+    def delta_hessian_files(self, val):
+        val = self.delta_setter_helper(val, self.hessian_file, "delta_hessian_files")
+        self._delta_hessian_files = val
 
     @property
     def delta_names(self):
@@ -483,9 +514,9 @@ class Options(object):
                         val[delta_itr][template_itr] = tmp[delta_itr][template_itr]
                     elif template in delta_set:
                         index = delta_set.index(template)
-                        val[delta_itr][template_itr] = tmp[delta_tr][index]
+                        val[delta_itr][template_itr] = tmp[delta_itr][index]
                     else:
-                        for prev_itr, prev_set in enumerate(self.delta_temples[:delta_set]):
+                        for prev_itr, prev_set in enumerate(self.delta_templates[:delta_set]):
                             if template in prev_set:
                                 index = prev_set.index(template)
                                 val[delta_itr][template_itr] = tmp[prev_itr][index]
@@ -541,6 +572,15 @@ class Options(object):
         val = self.delta_setter_helper(val, self.scratch, "delta_scratches")
         self._delta_scratch = val
 
+    @property
+    def delta_deriv_regexes(self):
+        return self._delta_deriv_regexes
+
+    @delta_deriv_regexes.setter
+    def delta_deriv_regexes(self, val):
+        val = self.delta_setter_helper(val, self.deriv_regex, "delta_deriv_regexes")
+        self._delta_deriv_regexes = val
+
     def enforce_xtpl_option_consistency(self):
         """Make sure all required options are set, dertypes allows all required gradients to be
         computed, and all options get broadcast to full specification """
@@ -557,9 +597,18 @@ class Options(object):
         else:
             self.xtpl = True
 
-        xtpl_additions = [self.xtpl_scratches, self.xtpl_parallels, self.xtpl_names,
-                          self.xtpl_dertypes, self.xtpl_memories, self.xtpl_programs,
-                          self.xtpl_nslots, self.xtpl_queues, self.xtpl_time_limits]
+        xtpl_additions = [self.xtpl_scratches, 
+                          self.xtpl_parallels, 
+                          self.xtpl_names,
+                          self.xtpl_dertypes, 
+                          self.xtpl_memories, 
+                          self.xtpl_programs,
+                          self.xtpl_nslots, 
+                          self.xtpl_queues, 
+                          self.xtpl_time_limits, 
+                          self.xtpl_deriv_regexes,
+                          self.xtpl_hessian_files]
+
         xtpl_options = xtpl_options + xtpl_additions
 
 
@@ -597,9 +646,18 @@ class Options(object):
             if len(template_set) == 1 and len(self.delta_regexes[itr]) == 1:
                 raise ValueError("If only one template is provided. Two regexes must be provided")
 
-        delta_options = [self.delta_templates, self.delta_programs, self.delta_queues, self.delta_nslots,
-                         self.delta_memories, self.delta_dertypes, self.delta_scratches,
-                         self.delta_parallels, self.delta_time_limits, self.delta_names]
+        delta_options = [self.delta_templates,
+                         self.delta_programs,
+                         self.delta_queues, 
+                         self.delta_nslots,
+                         self.delta_memories, 
+                         self.delta_dertypes, 
+                         self.delta_scratches,
+                         self.delta_parallels, 
+                         self.delta_time_limits, 
+                         self.delta_names, 
+                         self.delta_deriv_regexes,
+                         self.delta_hessian_files]
 
         # ensure all options have two entries for each list, copying if necessary
         # under assumption user would like an option to apply to both calculations

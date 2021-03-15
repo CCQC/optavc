@@ -6,7 +6,7 @@ import psi4
 
 from .template import TemplateFileProcessor
 from .findifcalcs import FiniteDifferenceCalc, Gradient, Hessian
-from .calculations import AnalyticCalc, Calculation, AnalyticGradient
+from .calculations import AnalyticCalc, Calculation, AnalyticGradient, AnalyticHessian
 
 
 class Procedure(Calculation):
@@ -41,31 +41,44 @@ class Procedure(Calculation):
             options.program = calc_options[3]
             options.parallel = calc_options[4]
             options.queue = calc_options[5]
+            options.name = calc_options[6]
             options.scratch = calc_options[7]
             options.nslots = calc_options[8]
             options.memory = calc_options[9]
             options.time_limit = calc_options[10]
+            options.deriv_regex = calc_options[11]
+            options.hessian_file = calc_options[12]
 
-            options.name = f"{calc_options[6]}--{self.iteration:>02d}" 
-
+            print(options.deriv_regex)
             print(options.dertype)
 
             if self.job_type == 'GRADIENT':
                 calc_path = f"{self.path}/STEP{self.iteration:>02d}/{options.name}"
             else:
                 calc_path = f"{self.path}/{options.name}"
-            
+
+            options.name = f"{options.name}--{self.iteration:>02d}"
+
             input_file = self.proc_inputs[calc_itr]
             print(calc_path)
-                
+
             if self.job_type == 'HESSIAN':
-                # Hessian will make decision within the class how to compute itself
-                calc_objects.append(Hessian(self.molecule, input_file, options, calc_path))
+                if options.dertype == 'HESSIAN':
+                    print("We have reached this point")
+                    calc_objects.append(AnalyticHessian(self.molecule,
+                                                        input_file, 
+                                                        options,
+                                                        path=calc_path))
+                elif options.dertype in ['ENERGY', 'GRADIENT']:
+                    # Hessian will make decision within the class how to compute itself
+                    calc_objects.append(Hessian(self.molecule, input_file, options, calc_path))
             else:
                 # for optimization decide now how to compute the gradient
                 if options.dertype == 'GRADIENT':
-                    calc_objects.append(
-                        AnalyticGradient(self.molecule, input_file, options, path=calc_path))
+                    calc_objects.append(AnalyticGradient(self.molecule, 
+                                                         input_file, 
+                                                         options, 
+                                                         path=calc_path))
                 else:
                     calc_objects.append(Gradient(self.molecule, input_file, options, path=calc_path))
 
@@ -113,7 +126,7 @@ class Procedure(Calculation):
                     unique.append(calc)
                 else:
                     raise ValueError("Procedure cannot run calculations that aren't of type AnalyticCalc or FindifCalc")
-        return unique 
+        return unique
 
     def write_input(self):
         for calc in self.unique_calculations():
@@ -148,7 +161,9 @@ class Xtpl(Procedure):
                                  procedure_options.xtpl_scratches,
                                  procedure_options.xtpl_nslots,
                                  procedure_options.xtpl_memories,
-                                 procedure_options.xtpl_time_limits]
+                                 procedure_options.xtpl_time_limits,
+                                 procedure_options.xtpl_deriv_regexes,
+                                 procedure_options.xtpl_hessian_files]
         super().__init__(job_type, molecule, procedure_options, path, iteration)
 
         self.procedure_options = self.flatten_procedure_options()
@@ -184,7 +199,7 @@ class Xtpl(Procedure):
                                                       valueLO=energies[1],
                                                       zHI=self.options.xtpl_basis_sets[0][0],
                                                       valueHI=energies[0])
-        
+
         # indexes using 2 and 3 instead of -x like in below if statements since we could perform
         # a dz, tz, qz scf but only need the qz and tz in compensating for extrapolating the
         # reference energy with the correlation energy
@@ -267,7 +282,10 @@ class Delta(Procedure):
                                   procedure_options.delta_scratches,
                                   procedure_options.delta_nslots,
                                   procedure_options.delta_memories,
-                                  procedure_options.delta_time_limits]
+                                  procedure_options.delta_time_limits,
+                                  procedure_options.delta_deriv_regexes,
+                                  procedure_options.delta_hessian_files]
+
         super().__init__(job_type, molecule, procedure_options, path, iteration)
 
         self.procedure_options = self.flatten_procedure_options()

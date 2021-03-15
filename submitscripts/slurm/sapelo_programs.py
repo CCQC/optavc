@@ -130,7 +130,12 @@ prefix=/apps/eb/$module/
 module load $module
 
 # Copy job data
-cp $SLURM_SUBMIT_DIR/ZMAT $scratch_dir
+if [[-e input.dat && ! -e ZMAT ]]; then
+  cp input.dat $scratch_dir/ZMAT
+else
+  cp $SLURM_SUBMIT_DIR/ZMAT $scratch_dir
+fi
+
 cp $prefix/basis/GENBAS $scratch_dir
 cp $prefix/basis/ECPDATA $scratch_dir
 if [ -e JAINDX ]; then cp JAINDX $scratch_dir ; fi

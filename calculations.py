@@ -44,8 +44,8 @@ class Calculation(ABC):
 
     def to_dict(self):
         """ Not generally used. Serialize all object attributes and add in subset of keywords """
-        self.dict_obj = __dict__
-        self.dict_obj['type'] = self.__name__
+        self.dict_obj = self.__dict__
+        self.dict_obj['type'] = self.__class__.__name__
         self.dict_obj['path'] = self.path
         self.dict_obj['options'] = {}
         # for i in self.options:
@@ -111,6 +111,9 @@ class AnalyticCalc(Calculation):
         self.options.job_array = False  # If interacting with singlepoint, cannot use array or -sync
         self.options.job_array_range = (1, 1)  # job array range always checked in submitter
 
+        self.file_not_found_behavior = None
+        self.disp_num = None
+
         if self.options.cluster == 'HOST':
             self.cluster = None
         else:
@@ -142,6 +145,7 @@ class AnalyticCalc(Calculation):
             output = self.cluster.submit(self.options)
 
         os.chdir(working_directory)
+        self.job_num = output
         return output
 
     def write_input(self):
@@ -340,20 +344,125 @@ class AnalyticGradient(AnalyticCalc):
             if not self.check_status(self.options.energy_regex):
                 self.run()
 
+        # if self.job_num is None run has not been called. Either this is by mistake or we're performing a restart
+        if self.job_num:
+            self.wait_for_calculation()
+
         if not self.check_status(self.options.energy_regex):
-            raise RuntimeError(f"Calculation {name} finished but could not get result using"
+            raise RuntimeError(f"Calculation {self.options.name} finished but could not get result using"
                                f"regex: {self.options.energy_regex}")
  
         output_path = os.path.join(self.path, self.options.output_name)
         
         with open(output_path) as f:
             output = f.read()
-        
+    
         # add gradient regex to header regex supplied by user.
         label_xyz = r"(\s*.*(\s*-?\d+\.\d+){3})+"
-        regex = self.options.gradient_regex + label_xyz
+        regex = self.options.deriv_regex + label_xyz
         grad_str = re.search(regex, output).group()
  
+        return self.str_to_ndarray(grad_str)
+
+    def get_reference_energy(self):
+        """ Get reference energy from gradient calculation
+
+        Returns
+        -------
+        float
+
+        """
+        
+        output_path = os.path.join(self.path, self.options.output_name)
+        
+        with open(output_path) as f:
+            output = f.read()
+    
+        return self._get_energy_float(self.options.energy_regex, output) 
+
+    def str_to_ndarray(self, grad_output):
+        """ Take string with possible header from the output file or a specified gradient file
+        and convert to psi4 matrix
+        
+        Notes
+        -----
+        ignores any header grabs the last three columns of the last 'natom' lines and converts to
+        a psi4 matrix via numpy array """
+
+        grad_lines = grad_output.split("\n")
+        # drop labels if present (assumes labels in first whitespace separated column) for
+        # last lines in string. Assumes dE/dx, ... values are the last lines in string
+        twoD_grad_str = [line.split()[-3:] for line in grad_lines[-self.molecule.natom:]]
+        twoD_grad = np.asarray(twoD_grad_str).astype(float)
+        return twoD_grad
+
+class AnalyticHessian(AnalyticCalc):
+    """ This class was implemented in order to use CFour's analytic hessians with the psi4 CBS
+    
+    Handles the lookup of output from a Hessian calculation. Adds the ability to wait for a calculation
+    to finish on the cluster before getting a result. 
+
+    """
+
+    def __init__(self, molecule, inp_file_obj, options, disp_num=None, path=".", key=None):
+        super().__init__(molecule, inp_file_obj, options, path, key)
+
+        not_found = "Hessian calculation has failed."
+
+    # def reap(self, force_resub):
+    #     """ force_resub is only here to match interface for findifcalc resub
+    #     reap is only called from optimization when gradient is expected to
+    #     have already finished """
+
+    #     return self.get_result(skip_wait=False)
+
+    def get_result(self, force_resub=False):
+        """ Gets the hessian according to method specified by user
+    
+        Returns
+        -------
+        np.ndarray
+            shape: (natom, 3)
+    
+        """
+
+        if force_resub:
+            if not self.check_status(self.options.energy_regex):
+                self.run()
+
+        if self.job_num:
+            self.wait_for_calculation()
+
+        if not self.check_status(self.options.energy_regex):
+            raise RuntimeError(f"Calculation {self.options.name} finished but could not get result using"
+                               f"regex: {self.options.energy_regex}")
+ 
+        if self.options.hessian_file == 'output':
+            return self.output_file_lookup()
+        else:
+            return self.hessian_file_lookup()
+
+    def hessian_file_lookup(self):
+        
+        with open(self.options.hessian_file) as f:
+            hess_string = f.read()
+
+        hess_rows = hess_string.split("\n")[-3*self.molecule.natom:]
+        hessian_list = [row.split() for row in hess_rows]
+
+        return np.asarray(hess_rows).astype(float)
+    
+    def output_file_lookup(self):
+        output_path = os.path.join(self.path, self.options.output_name)
+        
+        with open(output_path) as f:
+            output = f.read()
+        
+        # add hessian regex to header regex supplied by user.
+        label_xyz = r"(\s*.*(\s*-?\d+\.\d+){3})+"
+        regex = self.options.result_regex + label_xyz
+        grad_str = re.search(regex, output).group()
+
         return self.str_to_ndarray(grad_str)
 
     def get_reference_energy(self):

@@ -54,7 +54,12 @@ scratch=$TMPDIR/$USER/$JOB_ID
 prefix=/opt/vulcan/opt/vulcan/linux-x86_64/intel-13.0.0/cfour-2.0-yhj426etc3g7hslvbmpgvdymp2w76rob
 
 # Copy job data
-cp $SGE_O_WORKDIR/ZMAT $scratch/ZMAT
+if [[ -e input.dat && ! -e ZMAT ]]; then
+    cp input.dat $scratch/ZMAT
+else
+    cp $SGE_O_WORKDIR/ZMAT $scratch/ZMAT
+fi
+
 cp $prefix/basis/GENBAS $scratch
 cp $prefix/basis/ECPDATA $scratch
 if [ -e JAINDX ]; then cp JAINDX $scratch ; fi
