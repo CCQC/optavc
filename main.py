@@ -18,7 +18,7 @@ from . import optimize
 from . import findifcalcs
 from . import xtpl
 from .template import TemplateFileProcessor
-
+from .calculations import AnalyticHessian
 
 def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, sow=True, path=".",
                test_input=False, molecule=None):
@@ -81,7 +81,13 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
 
         use_procedure, hess_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj, path)
         if not use_procedure:
-            hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
+            
+            print(options_obj.dertype)
+
+            if options_obj.dertype == 'HESSIAN':
+                hess_obj = AnalyticHessian(molecule, input_obj, options_obj, path)
+            else:
+                hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
 
         if sow:
             hess_obj.compute_result()

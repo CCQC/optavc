@@ -25,10 +25,12 @@ import re
 import shutil
 import copy
 import time
+import hashlib
 from abc import ABC, abstractmethod
 
 import numpy as np
 from psi4.core import Matrix
+from psi4.driver.qcdb import cfour, hessparse 
 
 from .cluster import Cluster
 
@@ -41,6 +43,20 @@ class Calculation(ABC):
         self.key = key
         self.dict_obj = {}
         self.resub_count = 0
+
+    def __str__(self):
+    
+        return f"{self.class_name()}: {self.options.name}"
+    
+    def __repr__(self):
+        
+        return f"{self.class_name()}: {self.options.name}"
+
+    def class_name(self):
+        """ return AnalyticGradient from <class 'optavc.calculations.AnalyticGradient'> """
+        tmp = str(self.__class__)
+        tmp = tmp.split("'")
+        return tmp[-2].split(".")[-1]
 
     def to_dict(self):
         """ Not generally used. Serialize all object attributes and add in subset of keywords """
@@ -302,7 +318,6 @@ class SinglePoint(AnalyticCalc):
         with open(output_path, 'w') as file:
             file.writelines(output_text)
 
-
 class AnalyticGradient(AnalyticCalc):
     """ This class was implemented in order to use CFour's analytic gradients with the psi4 CBS
     procedure. CCSD(T) gradients from CFour are not available through the Psi4/CFour interface.
@@ -352,9 +367,14 @@ class AnalyticGradient(AnalyticCalc):
         if not self.check_status(self.options.energy_regex):
             raise RuntimeError(f"Calculation {self.options.name} finished but could not get result using"
                                f"regex: {self.options.energy_regex}")
- 
+
+        if self.options.deriv_file == 'output':
+            return self.grad_from_output()
+        else:
+            return self.grad_file_lookup()
+
+    def grad_from_output(self):
         output_path = os.path.join(self.path, self.options.output_name)
-        
         with open(output_path) as f:
             output = f.read()
     
@@ -363,7 +383,13 @@ class AnalyticGradient(AnalyticCalc):
         regex = self.options.deriv_regex + label_xyz
         grad_str = re.search(regex, output).group()
  
-        return self.str_to_ndarray(grad_str)
+        # cleaned_array = np.where(np.abs(gradient_array) > 1e-14, gradient_array, 0.0)
+
+        # aligned_grad = self.rotate_matrix(output, cleaned_array) 
+        # return np.where(np.abs(aligned_grad) > 1e-14, aligned_grad, 0.0)
+       
+        gradient_array = self.str_to_ndarray(grad_str)
+        return gradient_array
 
     def get_reference_energy(self):
         """ Get reference energy from gradient calculation
@@ -380,6 +406,33 @@ class AnalyticGradient(AnalyticCalc):
             output = f.read()
     
         return self._get_energy_float(self.options.energy_regex, output) 
+
+    def grad_file_lookup(self):
+        
+        file_path = os.path.join(self.path, self.options.deriv_file)
+
+        with open(file_path, 'r') as f:
+            grad_file = f.read()
+
+        if self.options.program.lower() == 'cfour':
+            import qcelemental as qcel
+
+            molecule, cfour_grad = cfour.harvest_GRD(grad_file)
+            cfour_mol, _, _, _, c4_unique = molecule.to_arrays() 
+            
+            psi_mol, _, _, _, psi_unique = self.molecule.cast_to_psi4_molecule_object().to_arrays()
+            
+            print("rotating molecule and gradient with qcelemental align")
+            rmsd, qcel_alignment_mill = qcel.molutil.align.B787(rgeom=psi_mol,
+                                                                cgeom=cfour_mol,
+                                                                runiq=psi_unique,
+                                                                cuniq=c4_unique,
+                                                                verbose=0)
+            gradient = qcel_alignment_mill.align_gradient(np.asarray(cfour_grad))
+        else:
+            gradient = self.str_to_ndarray(grad_file)
+        
+        return gradient
 
     def str_to_ndarray(self, grad_output):
         """ Take string with possible header from the output file or a specified gradient file
@@ -438,19 +491,31 @@ class AnalyticHessian(AnalyticCalc):
             raise RuntimeError(f"Calculation {self.options.name} finished but could not get result using"
                                f"regex: {self.options.energy_regex}")
  
-        if self.options.hessian_file == 'output':
-            return self.output_file_lookup()
+        if self.options.deriv_file == 'output':
+            hessian_array = self.output_file_lookup()
         else:
-            return self.hessian_file_lookup()
+            hessian_array = self.hessian_file_lookup()
+        
+        return hessian_array
 
     def hessian_file_lookup(self):
-        
-        with open(self.options.hessian_file) as f:
-            hess_string = f.read()
+        """Try to get the hesian from a special written file. Assuming a naive format. 
 
+        Use psi4 qcdb machinery to get a hessian from cfour and ensure proper orientation """    
+ 
+        file_path = os.path.join(self.path, self.options.deriv_file)
+        
+        with open(file_path) as f:
+            hess_string = f.read()
+       
+        if self.options.program.lower() == 'cfour':
+        
+            hessian = hessparse.load_hessian(hess_string, dtype="fcmfinal")
+            return self.rotate_hessian(hessian)
+        
         hess_rows = hess_string.split("\n")[-3*self.molecule.natom:]
         hessian_list = [row.split() for row in hess_rows]
-
+        
         return np.asarray(hess_rows).astype(float)
     
     def output_file_lookup(self):
@@ -465,6 +530,30 @@ class AnalyticHessian(AnalyticCalc):
         grad_str = re.search(regex, output).group()
 
         return self.str_to_ndarray(grad_str)
+
+    def rotate_hessian(self, hessian):
+        """only needed for cfour. Same procedure as in psi4. Use grad file to rotate the internal molecular orientaiton
+        back to the psi4 (user) orientation. Then rotate the hessian """ 
+
+        import qcelemental as qcel
+
+        file_path = os.path.join(self.path, 'GRD')
+        with open(file_path, 'r') as f:
+            grad_file = f.read()
+
+
+        molecule, cfour_grad = cfour.harvest_GRD(grad_file)
+        cfour_mol, _, _, _, c4_unique = molecule.to_arrays()
+        
+        psi_mol, _, _, _, psi_unique = self.molecule.cast_to_psi4_molecule_object().to_arrays()
+        
+        print("rotating molecule and gradient with qcelemental align")
+        rmsd, qcel_alignment_mill = qcel.molutil.align.B787(rgeom=psi_mol,
+                                                            cgeom=cfour_mol,
+                                                            runiq=psi_unique,
+                                                            cuniq=c4_unique,
+                                                            verbose=0)
+        return qcel_alignment_mill.align_hessian(hessian) 
 
     def get_reference_energy(self):
         """ Get reference energy from gradient calculation

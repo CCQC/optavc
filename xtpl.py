@@ -47,8 +47,11 @@ class Procedure(Calculation):
             options.memory = calc_options[9]
             options.time_limit = calc_options[10]
             options.deriv_regex = calc_options[11]
-            options.hessian_file = calc_options[12]
+            options.deriv_file = calc_options[12]
 
+            print(options.deriv_file)
+            print(calc_options[12])
+            
             print(options.deriv_regex)
             print(options.dertype)
 
@@ -163,7 +166,8 @@ class Xtpl(Procedure):
                                  procedure_options.xtpl_memories,
                                  procedure_options.xtpl_time_limits,
                                  procedure_options.xtpl_deriv_regexes,
-                                 procedure_options.xtpl_hessian_files]
+                                 procedure_options.xtpl_deriv_files,
+                                 procedure_options.xtpl_basis_sets]
         super().__init__(job_type, molecule, procedure_options, path, iteration)
 
         self.procedure_options = self.flatten_procedure_options()
@@ -223,7 +227,7 @@ class Xtpl(Procedure):
         # now perform the extrapolation of the reference energy 
         if self.options.scf_xtpl:
         
-            if len(self.procedure_options.basis_sets) == 5:
+            if len(self.procedure_options[-1]) == 5:
                 scf_result = psi4.driver.driver_cbs.scf_xtpl_helgaker_3(f"{self.job_type}",
                                                             zLO=self.options.xtpl_basis_sets[1][-1],
                                                             valueLO=results[-1],
@@ -238,7 +242,7 @@ class Xtpl(Procedure):
                                                             valueMD=energies[-2],
                                                             zHI=self.options.xtpl_basis_sets[1][-3],
                                                             valueHI=energies[-3])
-            elif len(self.procedure_options.basis_sets) == 4:
+            elif len(self.procedure_options[-1]) == 4:
                 scf_result = psi4.driver.driver_cbs.scf_xtpl_helgaker_2(f"{self.job_type}",
                                                             zLO=self.options.xtpl_basis_sets[1][-1],
                                                             valueLO=results[-1],
@@ -284,7 +288,7 @@ class Delta(Procedure):
                                   procedure_options.delta_memories,
                                   procedure_options.delta_time_limits,
                                   procedure_options.delta_deriv_regexes,
-                                  procedure_options.delta_hessian_files]
+                                  procedure_options.delta_deriv_files]
 
         super().__init__(job_type, molecule, procedure_options, path, iteration)
 

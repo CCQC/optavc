@@ -30,7 +30,6 @@ class Options(object):
         self.email_opts = kwargs.pop("email_opts", 'END,FAIL')
         self.memory = kwargs.pop("memory", "32GB")
         self.name = kwargs.pop("name", "STEP")
-        self.hessian_file = kwargs.pop("hessian_file", 'output')
 
         self.files_to_copy = kwargs.pop("files_to_copy", [])
         self.input_name = kwargs.pop("input_name", "input.dat")
@@ -40,6 +39,7 @@ class Options(object):
 
         # options to govern the workings on optavc
         self.dertype = kwargs.pop('dertype', None)
+        self.deriv_file = kwargs.pop("deriv_file", 'output')
         self.mpi = kwargs.pop("mpi", None)
         self.job_array = kwargs.pop("job_array", False)
         self.resub = kwargs.pop("resub", False)
@@ -65,7 +65,7 @@ class Options(object):
         self.xtpl_scratches = kwargs.pop("xtpl_scratches", None)  # NON XTPL DEFAULT
         self.scf_xtpl = kwargs.pop("scf_xtpl", False)
         self.xtpl_deriv_regexes = kwargs.pop("xtpl_deriv_regexes", None)
-        self.xtpl_hessian_files = kwargs.pop("xtpl_hessian_files", None)
+        self.xtpl_deriv_files = kwargs.pop("xtpl_hessian_files", None)
         self.enforce_xtpl_option_consistency()
 
         # options for calculations with corrections (correlation correction, relativistic, etc)
@@ -82,7 +82,7 @@ class Options(object):
         self.delta_time_limits = kwargs.pop("delta_time_limits", None)  # NON DELTA DEFAULT
         self.delta_scratches = kwargs.pop("delta_scratches", None)  # NON DELTA DEFAULT
         self.delta_deriv_regexes = kwargs.pop("delta_deriv_regexes", None)
-        self.delta_hessian_files = kwargs.pop("delta_hessian_files", None)
+        self.delta_deriv_files = kwargs.pop("delta_hessian_files", None)
         self.enforce_delta_options_consistency()
 
         if self.mpi is not None:
@@ -203,6 +203,24 @@ class Options(object):
             self.email = "${USER}@uga.edu"
         else:
             self._email = val
+
+    @property
+    def deriv_file(self):
+        return self._deriv_file
+
+    @deriv_file.setter
+    def deriv_file(self, val):
+
+        if val == 'output':
+            if self.program.upper() == 'CFOUR':
+                if self.dertype == "HESSIAN":
+                    val = "FCMFINAL"
+                else:
+                    val = "GRD"
+        print("ready to assign deriv_file")
+        print(self.program)
+        print(val)
+        self._deriv_file = val
 
     @property
     def job_array(self):
@@ -419,13 +437,13 @@ class Options(object):
         self._xtpl_scratches = val
 
     @property
-    def xtpl_hessian_files(self):
-        return self._xtpl_hessian_files
+    def xtpl_deriv_files(self):
+        return self._xtpl_deriv_files
     
-    @xtpl_hessian_files.setter
-    def xtpl_hessian_files(self, val):
-        val = Options.xtpl_setter_helper(val, self.hessian_file, "xtpl_setter_helper")
-        self._xtpl_hessian_files = val
+    @xtpl_deriv_files.setter
+    def xtpl_deriv_files(self, val):
+        val = Options.xtpl_setter_helper(val, self.deriv_file, "xtpl_setter_helper")
+        self._xtpl_deriv_files = val
 
     @property
     def delta_regexes(self):
@@ -480,13 +498,13 @@ class Options(object):
         self._delta_queues = val
 
     @property
-    def delta_hessian_files(self):
-        return self._delta_hessian_files
+    def delta_deriv_files(self):
+        return self._delta_deriv_files
 
-    @delta_hessian_files.setter
-    def delta_hessian_files(self, val):
-        val = self.delta_setter_helper(val, self.hessian_file, "delta_hessian_files")
-        self._delta_hessian_files = val
+    @delta_deriv_files.setter
+    def delta_deriv_files(self, val):
+        val = self.delta_setter_helper(val, self.deriv_file, "delta_deriv_files")
+        self._delta_deriv_files = val
 
     @property
     def delta_names(self):
@@ -607,7 +625,7 @@ class Options(object):
                           self.xtpl_queues, 
                           self.xtpl_time_limits, 
                           self.xtpl_deriv_regexes,
-                          self.xtpl_hessian_files]
+                          self.xtpl_deriv_files]
 
         xtpl_options = xtpl_options + xtpl_additions
 
@@ -657,7 +675,7 @@ class Options(object):
                          self.delta_time_limits, 
                          self.delta_names, 
                          self.delta_deriv_regexes,
-                         self.delta_hessian_files]
+                         self.delta_deriv_files]
 
         # ensure all options have two entries for each list, copying if necessary
         # under assumption user would like an option to apply to both calculations

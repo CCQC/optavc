@@ -156,7 +156,11 @@ class FiniteDifferenceCalc(Calculation):
                 # use minimum time or user's defined time
                 time.sleep(check_every)
             else:
-
+                
+                if len(self.calculations) != len(self.job_ids):
+                    raise ValueError('Please check regexes and that all jobs have successfully exited.\n'
+                                     'When restarting the calculation, 1 or more jobs were identfied as having failed\n'
+                                     f'{self.options.name}: {self.failed}')
                 # coder should always add a wait before calling query_cluster
                 for itr, calculation in enumerate(self.calculations):
                     finished, _ = self.cluster.query_cluster(self.job_ids[itr])

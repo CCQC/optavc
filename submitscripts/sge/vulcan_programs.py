@@ -83,6 +83,8 @@ xja2fja
 
 echo " Saving data and cleaning up..."
 if [ -e ZMATnew ]; then cp -f ZMATnew $SGE_O_WORKDIR/ZMATnew ; fi
+if [ -e GRD ]; then cp -f GRD $SGE_O_WORKDIR/GRD ; fi
+if [ -e FCMFINAL ]; then cp -f FCMFINAL $SGE_O_WORKDIR/FCMFINAL ; fi
 
 # Create a job data archive file
 tar --transform "s,^,Job_Data_$JOB_ID/," -vcf $SGE_O_WORKDIR/Job_Data_$JOB_ID.tar OPTARC FCMINT FCMFINAL ZMATnew JMOL.plot JOBARC JAINDX FJOBARC DIPDER HESSIAN MOLDEN NEWMOS AVOGADROplot.log den.dat
