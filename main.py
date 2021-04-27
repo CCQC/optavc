@@ -11,15 +11,17 @@ run_optavc_mpi()
 
 """
 
+import psi4
+
 from optavc.options import Options
 from . import optimize
 from . import findifcalcs
 from . import xtpl
 from .template import TemplateFileProcessor
-
+from .calculations import AnalyticHessian
 
 def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, sow=True, path=".",
-               test_input=False):
+               test_input=False, molecule=None):
     """ optavc driver meant to unify input. Create options object, needed template objects, start
     Hessian or Optimization calculation
 
@@ -48,17 +50,15 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
     options_obj = Options(**options_dict)
 
     if options_obj.xtpl:
-        tfps = [TemplateFileProcessor(open(i).read(), options_obj) for i in
-                options_obj.xtpl_templates]
-        tfp = tfps[0]
-        xtpl_inputs = [i.input_file_object for i in tfps]
-    else:
-        template_file_string = open(options_obj.template_file_path).read()
-        tfp = TemplateFileProcessor(template_file_string, options_obj)
-        xtpl_inputs = None
+        options_obj.template_file_path = options_obj._xtpl_templates[0][0]
+
+    template_file_string = open(options_obj.template_file_path).read()
+    tfp = TemplateFileProcessor(template_file_string, options_obj)
+    xtpl_inputs = None
 
     input_obj = tfp.input_file_object
-    molecule = tfp.molecule
+    if not molecule:
+        molecule = tfp.molecule
 
     if test_input:
         try:
@@ -70,25 +70,47 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
             raise
 
     if jobtype.upper() in ['OPT', "OPTIMIZATION"]:
-        opt_obj = optimize.Optimization(molecule, input_obj, options_obj, xtpl_inputs)
-        return opt_obj.run(restart_iteration, xtpl_restart)
+        opt_obj = optimize.Optimization(molecule, input_obj, options_obj)
+        result, energy, molecule = opt_obj.run(restart_iteration, xtpl_restart)
+        return result, energy, molecule
+
     elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
 
         if path == '.':
             path = './HESS'
 
-        if options_obj.xtpl:
-            findifcalcs.Hessian.xtpl_hessian(molecule, xtpl_inputs, options_obj, path, sow)
-        else:
-            hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
-            if sow:
-                hess_obj.compute_result()
+        use_procedure, hess_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj, path)
+        if not use_procedure:
+            
+            print(options_obj.dertype)
+
+            if options_obj.dertype == 'HESSIAN':
+                hess_obj = AnalyticHessian(molecule, input_obj, options_obj, path)
             else:
-                hess_obj.reap(force_resub=True)
-        return True
+                hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
+
+        if sow:
+            hess_obj.compute_result()
+        else:
+            hess_obj.get_result(force_resub=True)
+
+        psi4.core.print_out("\n\n\n============================================================\n")
+        psi4.core.print_out("========================= OPTAVC ===========================\n")
+        psi4.core.print_out("============================================================\n")
+
+        psi4.core.print_out("\nThe final computed hessian is:\n\n")        
+        psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
+        wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
+        wfn.set_hessian(psi4.core.Matrix.from_array(hess_obj.result))
+        wfn.set_energy(hess_obj.energy)
+        psi4.core.set_variable("CURRENT ENERGY", hess_obj.energy)
+        psi4.driver.vibanal_wfn(wfn)
+        psi4.driver._hessian_write(wfn) 
+
+        return hess_obj.result, hess_obj.energy, hess_obj.molecule
     else:
         raise ValueError(
-            """Can only run deriv or optimizations. For gradients see findifcalcs.py to run or
+            """Can only run hessians or optimizations. For gradients see findifcalcs.py to run or
             add wrapper here""")
 
 
@@ -103,30 +125,32 @@ def test_singlepoints(jobtype, molecule, options_obj, input_obj, xtpl_inputs=Non
         if opt_obj.options.xtpl:
             for gradient, _ in opt_obj.create_xtpl_gradients(iteration=0, restart_iteration=0,
                                                              user_xtpl_restart=False):
-                ref_singlepoint = gradient.singlepoints[0]
+                ref_singlepoint = gradient.calculations[0]
                 assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
-                assert ref_singlepoint.get_energy()
+                assert ref_singlepoint.get_result()
         else:
             # single gradient reap only
             gradient = opt_obj.create_opt_gradient(iteration=0)
-            ref_singlepoint = gradient.singlepoints[0]
+            ref_singlepoint = gradient.calculations[0]
             assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
-            assert ref_singlepoint.get_energy()
+            assert ref_singlepoint.get_result()
 
     elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
         if path == '.':
             path = './HESS'
 
-        if options_obj.xtpl:
-            for hess_obj in xtpl.xtpl_wrapper("HESSIAN", molecule, xtpl_inputs, options_obj):
-                ref_singlepoint = hess_obj.singlepoints[0]
+        use_procedure, xtpl_hess_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj,
+                                                               path, iteration=0)
+        if use_procedure:
+            for hess_obj in xtpl_hess_obj.calc_objects:
+                ref_singlepoint = hess_obj.calculations[0]
                 assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
-                assert ref_singlepoint.get_energy()
+                assert ref_singlepoint.get_result()
         else:
             hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
-            ref_singlepoint = hess_obj.singlepoints[0]
+            ref_singlepoint = hess_obj.calculations[0]
             assert ref_singlepoint.check_status(ref_singlepoint.options.energy_regex)
-            assert ref_singlepoint.get_energy()
+            assert ref_singlepoint.get_result()
 
 
 def run_optavc_mpi():

@@ -44,7 +44,7 @@ def test_hessian_failures(options, failures, paths):
 
         print(path)
         calc_obj = Hessian(molecule, input_obj, options_obj, path=path)
-        calc_size = len(calc_obj.singlepoints)
+        calc_size = len(calc_obj.calculations)
 
         for i in range(20):
             assert_failures_match(calc_obj, true_failures)
@@ -91,7 +91,7 @@ def test_gradient_failures(options, failures):
 
 def iterative_collect_failures(calc_obj, true_failures, num):
 
-    calc_size = len(calc_obj.singlepoints)
+    calc_size = len(calc_obj.calculations)
 
     for i in range(num):
         assert_failures_match(calc_obj, true_failures)

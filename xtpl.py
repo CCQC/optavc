@@ -1,105 +1,384 @@
 import copy
-from psi4.core import Matrix
-from psi4.driver.driver_cbs import corl_xtpl_helgaker_2
+from abc import abstractmethod
 
-from .findifcalcs import Gradient, Hessian
+import numpy as np
+import psi4
 
-def xtpl_wrapper(job_type, molecule, xtpl_inputs, xtpl_options, path="./HESS", iteration=0):
-    """ Create a series of Hessian or Gradient objects for use the extrpolation procedure 
+from .template import TemplateFileProcessor
+from .findifcalcs import FiniteDifferenceCalc, Gradient, Hessian
+from .calculations import AnalyticCalc, Calculation, AnalyticGradient, AnalyticHessian
 
-    Parameters
-    ----------
-    job_type: str
-    molecule: TemplateFileProcessor.molecule
-    xtpl_inputs : list[InputFileObj]
-        input file class instances for the two calculations needed for xtpl procedure
-    xtpl_options: Options
-        xtpl_ prefix indicates that this is used to set the 'standard' options from the
-        corresponding xtpl_* options here in the creation of a Gradient or Hessian
-    path: str, optional
-        can be used to redirect Hessian displacements from HESS/*_corr to path/*_corr
-    iteration : int
-        used to create grad_obj with correct path and name in xtpl procedure
 
-    Returns
-    -------
-    lsit[object]
-    """
+class Procedure(Calculation):
+    """ A procedure may be thought of as a list of Calculations and a list of instructions 'SOW'
+    and 'REAP' to enable calculating a series of Calculations """
 
-    # TODO ideally this file would be removed and placed in finddifcalc.
+    def __init__(self, job_type, molecule, procedure_options, path="./HESS", iteration=0):
 
-    path_additions = ["high_corr", "low_corr"]
-    derivative_calcs = []
+        super().__init__(molecule, procedure_options, path)
 
-    xtpl_regs = xtpl_options.xtpl_energy
-    if xtpl_options.xtpl_input_style == [2, 2]:
-        # Need to do: (CCSD, (T) correction), MP2
-        #             MP2/QZ, SCF/QZ and MP2/TZ
-        # reorder energy regex to match internal order above
-        ordered_E_regexes = [xtpl_regs[0], xtpl_regs[3], xtpl_regs[1], xtpl_regs[4], xtpl_regs[2]]
-        separate_mp2 = 2
-    else:
-        # (CCSD, (T) correction)
-        # MP2/QZ, SCF/QZ, MP2/TZ, MP2/DZ
-        ordered_E_regexes = [xtpl_regs[0], xtpl_regs[1], xtpl_regs[4], xtpl_regs[2], xtpl_regs[3]]
-        separate_mp2 = 1
+        self.job_type = job_type
+        self.iteration = iteration
+        self.procedure_options = None # This will get set by the child class constructors
 
-    for index, energy_regex in enumerate(ordered_E_regexes):
+        self.energy = None
+        self.result = None
 
-        # index can be only 0 or 1 here
-        # Only two possible programs/success strings/input files
-        if index >= separate_mp2:
-            corl_index = -1
+    def _create_calc_objects(self):
+        """ Use all the options for the procedures many calculations and Procedure attributes to
+        create all the needed Calculation objects for a series of Calculations """
+
+        calc_objects = []
+
+        for calc_itr in range(len(self.procedure)):
+
+            options = copy.deepcopy(self.options)
+            calc_options = [proc_option[calc_itr] for proc_option in self.procedure_options]
+            
+            options.energy_regex = calc_options[0]
+            options.template_file_path = calc_options[1]
+            options.dertype = calc_options[2]
+            options.program = calc_options[3]
+            options.parallel = calc_options[4]
+            options.queue = calc_options[5]
+            options.name = calc_options[6]
+            options.scratch = calc_options[7]
+            options.nslots = calc_options[8]
+            options.memory = calc_options[9]
+            options.time_limit = calc_options[10]
+            options.deriv_regex = calc_options[11]
+            options.deriv_file = calc_options[12]
+
+            print(options.deriv_file)
+            print(calc_options[12])
+            
+            print(options.deriv_regex)
+            print(options.dertype)
+
+            if self.job_type == 'GRADIENT':
+                calc_path = f"{self.path}/STEP{self.iteration:>02d}/{options.name}"
+            else:
+                calc_path = f"{self.path}/{options.name}"
+
+            options.name = f"{options.name}--{self.iteration:>02d}"
+
+            input_file = self.proc_inputs[calc_itr]
+            print(calc_path)
+
+            if self.job_type == 'HESSIAN':
+                if options.dertype == 'HESSIAN':
+                    print("We have reached this point")
+                    calc_objects.append(AnalyticHessian(self.molecule,
+                                                        input_file, 
+                                                        options,
+                                                        path=calc_path))
+                elif options.dertype in ['ENERGY', 'GRADIENT']:
+                    # Hessian will make decision within the class how to compute itself
+                    calc_objects.append(Hessian(self.molecule, input_file, options, calc_path))
+            else:
+                # for optimization decide now how to compute the gradient
+                if options.dertype == 'GRADIENT':
+                    calc_objects.append(AnalyticGradient(self.molecule, 
+                                                         input_file, 
+                                                         options, 
+                                                         path=calc_path))
+                else:
+                    calc_objects.append(Gradient(self.molecule, input_file, options, path=calc_path))
+
+        return calc_objects
+
+    def _create_input_files(self):
+        """ Create list of InputFile objects for each calculation from templates
+        Returns
+        -------
+        List[template.InputFile]
+
+        """
+
+        templates = self.procedure_options[1]
+        template_strings = [open(template).read() for template in templates]
+        xtpl_inputs = [TemplateFileProcessor(template, self.options).input_file_object for template in
+                       template_strings]
+        return xtpl_inputs
+
+    def _reap_sow_ordering(self):
+        """ Create a list detailing what calculations must be run and which may be reaped from a
+        previously run calculation. Template names are just strings check for equality to find
+        if a template should have already been run
+
+        Returns
+        -------
+        List[str]
+
+        """
+        templates = self.procedure_options[1]
+        procedure = []
+        for proc_itr, template in enumerate(templates):
+            # slice to find if template has already been seen by loop
+            if template in templates[:proc_itr]:
+                procedure.append('REAP')
+            else:
+                procedure.append('SOW')
+        return procedure
+
+    def unique_calculations(self):
+        unique = []
+        for calc_itr, calc in enumerate(self.calc_objects):
+            if self.procedure[calc_itr] == 'SOW':
+                if isinstance(calc, AnalyticCalc) or isinstance(calc, FiniteDifferenceCalc):
+                    unique.append(calc)
+                else:
+                    raise ValueError("Procedure cannot run calculations that aren't of type AnalyticCalc or FindifCalc")
+        return unique
+
+    def write_input(self):
+        for calc in self.unique_calculations():
+            calc.write_input()
+
+    def run(self):
+        return [calc.run() for calc in self.unique_calculations()]
+
+    def reap(self, force_resub=False):
+        return [calc.reap(force_resub) for calc in self.calc_objects]
+
+    def get_energies(self):
+        return [calc.get_reference_energy() for calc in self.calc_objects]
+
+    def get_reference_energy(self):
+        """ Called reference to match findif method name reference in terms of displacements """
+        return self.energy
+
+    def get_result(self, force_resub=False):
+        return [calc.get_result(force_resub) for calc in self.calc_objects]
+
+class Xtpl(Procedure):
+
+    def __init__(self, job_type, molecule, procedure_options, path="./HESS", iteration=0):
+        self.xtpl_option_list = [procedure_options.xtpl_regexes,
+                                 procedure_options.xtpl_templates,
+                                 procedure_options.xtpl_dertypes,
+                                 procedure_options.xtpl_programs,
+                                 procedure_options.xtpl_parallels,
+                                 procedure_options.xtpl_queues,
+                                 procedure_options.xtpl_names,
+                                 procedure_options.xtpl_scratches,
+                                 procedure_options.xtpl_nslots,
+                                 procedure_options.xtpl_memories,
+                                 procedure_options.xtpl_time_limits,
+                                 procedure_options.xtpl_deriv_regexes,
+                                 procedure_options.xtpl_deriv_files,
+                                 procedure_options.xtpl_basis_sets]
+        super().__init__(job_type, molecule, procedure_options, path, iteration)
+
+        self.procedure_options = self.flatten_procedure_options()
+        self.proc_inputs = self._create_input_files()
+        self.procedure = self._reap_sow_ordering()
+        self.calc_objects = self._create_calc_objects()
+
+    def flatten_procedure_options(self):
+        return [xtpl_option[0] + xtpl_option[1] for xtpl_option in self.xtpl_option_list]
+
+    def get_reference_energy(self):
+        return self.energy
+    
+    def get_result(self, force_resub=False):
+        
+
+        # CLARIFICATION. optavc reads in extrapolation input in the order large to small
+        # this is a hold over from a previous version where that actually made sense
+        # psi4 specifies basis sets in the order small to large. Indices may be flipped
+        # from what you would expect therefore
+
+        results = list(map(psi4.core.Matrix.from_array, super().get_result(force_resub)))
+        energies = self.get_energies()
+
+
+        corr_result = psi4.driver.driver_cbs.corl_xtpl_helgaker_2(f"{self.job_type}",
+                                                      zLO=self.options.xtpl_basis_sets[0][1],
+                                                      valueLO=results[1],
+                                                      zHI=self.options.xtpl_basis_sets[0][0],
+                                                      valueHI=results[0])
+        corr_energy = psi4.driver.driver_cbs.corl_xtpl_helgaker_2("energies",
+                                                      zLO=self.options.xtpl_basis_sets[0][1],
+                                                      valueLO=energies[1],
+                                                      zHI=self.options.xtpl_basis_sets[0][0],
+                                                      valueHI=energies[0])
+
+        # indexes using 2 and 3 instead of -x like in below if statements since we could perform
+        # a dz, tz, qz scf but only need the qz and tz in compensating for extrapolating the
+        # reference energy with the correlation energy
+        scf_result_corr = psi4.driver.driver_cbs.corl_xtpl_helgaker_2(f"scf correlated {self.job_type}",
+                                                      zLO=self.options.xtpl_basis_sets[0][1],
+                                                      valueLO=results[3],
+                                                      zHI=self.options.xtpl_basis_sets[0][0],
+                                                      valueHI=results[2])
+        scf_energy_corr = psi4.driver.driver_cbs.corl_xtpl_helgaker_2("scf correlated energies",
+                                                      zLO=self.options.xtpl_basis_sets[0][1],
+                                                      valueLO=energies[3],
+                                                      zHI=self.options.xtpl_basis_sets[0][0],
+                                                      valueHI=energies[2])
+
+        # do the correction for extrapolating with the total energy
+        corr_result = corr_result.np - scf_result_corr.np
+        corr_energy = corr_energy - scf_energy_corr
+
+        
+
+        # now perform the extrapolation of the reference energy 
+        if self.options.scf_xtpl:
+        
+            if len(self.procedure_options[-1]) == 5:
+                scf_result = psi4.driver.driver_cbs.scf_xtpl_helgaker_3(f"{self.job_type}",
+                                                            zLO=self.options.xtpl_basis_sets[1][-1],
+                                                            valueLO=results[-1],
+                                                            zMD=self.options.xtpl_basis_sets[1][-2],
+                                                            valueMD=results[-2],
+                                                            zHI=self.options.xtpl_basis_sets[1][-3],
+                                                            valueHI=results[-3])
+                scf_energy = psi4.driver.driver_cbs.scf_xtpl_helgaker_3("energies",
+                                                            zLO=self.options.xtpl_basis_sets[1][-1],
+                                                            valueLO=energies[-1],
+                                                            zMD=self.options.xtpl_basis_sets[1][-2],
+                                                            valueMD=energies[-2],
+                                                            zHI=self.options.xtpl_basis_sets[1][-3],
+                                                            valueHI=energies[-3])
+            elif len(self.procedure_options[-1]) == 4:
+                scf_result = psi4.driver.driver_cbs.scf_xtpl_helgaker_2(f"{self.job_type}",
+                                                            zLO=self.options.xtpl_basis_sets[1][-1],
+                                                            valueLO=results[-1],
+                                                            zHI=self.options.xtpl_basis_sets[1][-2],
+                                                            valueHI=results[-2])
+                scf_energy = psi4.driver.driver_cbs.scf_xtpl_helgaker_2("eneriges",
+                                                            zLO=self.options.xtpl_basis_sets[1][-1],
+                                                            valueLO=energies[-1],
+                                                            zHI=self.options.xtpl_basis_sets[1][-2],
+                                                            valueHI=energies[-2])
         else:
-            corl_index = 0
+            # don't extrapolate add to largest scf
+            scf_result = psi4.driver.driver_cbs.xtpl_highest_1(f"{self.job_type}",
+                                                   zHI=self.options.xtpl_basis_sets[1][-2],
+                                                   valueHI=results[-2])
 
-        # Set specific program and regex strings for specific gradient needed
-        # Will be used to create gradient object
-        # correction defaults to empty string (yields 0) if nothing found
-        options = copy.deepcopy(xtpl_options)
-        options.program = xtpl_options.xtpl_programs[corl_index]
-        options.success_regex = xtpl_options.xtpl_success[corl_index]
-        inp_file_obj = xtpl_inputs[corl_index]
+            scf_energy = psi4.driver.driver_cbs.xtpl_highest_1("eneriges",
+                                                   zHI=self.options.xtpl_basis_sets[1][-2],
+                                                   valueHI=energies[-2])
 
-        if index == 0:
-            options.correction_regexes = [xtpl_options.xtpl_corrections]
-        options.energy_regex = energy_regex
+        # corr_result is already converted from psi4 matrix to numpy array
+        self.result = corr_result + scf_result.np
+        self.energy = corr_energy + scf_energy
 
-        if job_type.upper() == 'GRADIENT':
-            options.name = f"{xtpl_options.name}--{iteration:>02d}"
-            step_path = f"{path}/STEP{iteration:>02d}/{path_additions[corl_index]}"
-            print(step_path)
-            grad_obj = Gradient(molecule, inp_file_obj, options, step_path)
-            derivative_calcs.append(grad_obj)
-        elif job_type.upper() == "HESSIAN":
-            hess_path = f"{path}/{path_additions[corl_index]}"
-            hess_obj = Hessian(molecule, inp_file_obj, options, hess_path)
-            derivative_calcs.append(hess_obj)
+        print("\n\nExtrapolation procedure has finished")
+        print(f"The result for extrapolation procedure is:\n{self.result}")
+        print(f"The energy from the extrapolation procedure is:\n{self.energy}")
+       
+        return self.result
 
-    return derivative_calcs
+class Delta(Procedure):
 
+    def __init__(self, job_type, molecule, procedure_options, path="./HESS", iteration=0):
+        self.delta_option_list = [procedure_options.delta_regexes,
+                                  procedure_options.delta_templates,
+                                  procedure_options.delta_dertypes,
+                                  procedure_options.delta_programs,
+                                  procedure_options.delta_parallels,
+                                  procedure_options.delta_queues,
+                                  procedure_options.delta_names,
+                                  procedure_options.delta_scratches,
+                                  procedure_options.delta_nslots,
+                                  procedure_options.delta_memories,
+                                  procedure_options.delta_time_limits,
+                                  procedure_options.delta_deriv_regexes,
+                                  procedure_options.delta_deriv_files]
 
-def energy_correction(basis_sets, deriv, ref_energies):
+        super().__init__(job_type, molecule, procedure_options, path, iteration)
 
-    low_cbs_hess = corl_xtpl_helgaker_2("basis set xtpl Hess", basis_sets[1], deriv[2],
-                                        basis_sets[0], deriv[1])
-    low_cbs_e = corl_xtpl_helgaker_2("basis set xtpl E", basis_sets[1], ref_energies[2],
-                                     basis_sets[0], ref_energies[1])
+        self.procedure_options = self.flatten_procedure_options()
+        self.proc_inputs = self._create_input_files()
+        self.procedure = self._reap_sow_ordering()
+        self.calc_objects = self._create_calc_objects()
+    
+    def flatten_procedure_options(self):
+        flat_delta_list = [''] * len(self.delta_option_list)
 
-    # This is, for instance, mp2/[T,Q]Z + CCSD(T)/DZ - mp2/DZ + SCF/QZ
-    final_hess = Matrix.from_array(low_cbs_hess.np + deriv[0].np - deriv[3].np + deriv[4].np)
-    final_en = low_cbs_e + ref_energies[0] - ref_energies[3] + ref_energies[4]
-    return final_en, final_hess, low_cbs_e
+        for delta_itr, delta_item in enumerate(self.delta_option_list):
+            flat_delta_list[delta_itr] = [calc_option for delta_set in delta_item for calc_option
+                                          in delta_set]
+        return flat_delta_list
 
+    @staticmethod
+    def calculate_corrections(self):
+        pass
 
-def order_high_low(deriv, energies, input_style):
-    """ Different orders for input_styles unify back to 
-    high_corr -> low corr, large_basis -> small_basis 
-    """
-    if input_style == [2, 2]:
-        ordered_grads = [deriv[0], deriv[2], deriv[4], deriv[1], deriv[3]]
-        ordered_energies = [energies[0], energies[2], energies[4], energies[1], energies[3]]
+    def get_result(self, force_resub=False):
+        
+        results = super().get_result(force_resub)
+        energies = super().get_energies()
+
+        result_corrections = []
+        energy_corrections = []
+
+        for itr in range(0, len(results), 2): 
+            result_corrections.append(results[itr] - results[itr + 1]) 
+            energy_corrections.append(energies[itr] - energies[itr + 1]) 
+
+        result_corrections = np.asarray(result_corrections)
+
+        # add all arrays elementwise
+        self.result = np.sum(result_corrections, axis=0)
+        self.energy = sum(energy_corrections)
+
+        print("\n\nCorrection procedure has finished")
+        print(f"The result for the correction procedure is:\n{self.result}")
+        print(f"The energy from the correction procedure is:\n{self.energy}")
+        return self.result
+        
+
+class XtplDelta(Procedure):
+
+    def __init__(self, job_type, molecule, procedure_options, path="./HESS", iteration=0):
+        super().__init__(job_type, molecule, procedure_options, path)
+
+        self.xtpl_procedure = Xtpl(job_type, molecule, procedure_options, path, iteration)
+        self.delta_procedure = Delta(job_type, molecule, procedure_options, path, iteration)
+
+        self.result = None
+        self.energy = None
+        self.calc_objects = self.xtpl_procedure.calc_objects + self.delta_procedure.calc_objects
+
+    def run(self):
+        self.xtpl_procedure.run()
+        self.delta_procedure.run()
+
+    def write_input(self):
+        self.xtpl_procedure.write_input()
+        self.delta_procedure.write_input()
+
+    def get_result(self, force_resub=False):
+
+        xtpl_result = self.xtpl_procedure.get_result(force_resub=False)
+        xtpl_energy = self.xtpl_procedure.get_reference_energy()
+        
+        delta_result = self.delta_procedure.get_result(force_resub=False)
+        delta_energy = self.delta_procedure.get_reference_energy()
+
+        self.result = xtpl_result + delta_result
+        self.energy = xtpl_energy + delta_energy
+        
+        print("\n\n\n*** ============================================= ***")
+        print("Extrapolation and Correction procedures have finished: ")
+        print(f"The final result is:\n{self.result}")
+        print(f"The final energy is:\n{self.energy}")
+        print("*** ============================================= ***")
+       
+        return self.result
+
+def xtpl_delta_wrapper(job_type, molecule, options, path='./HESS', iteration=0):
+    if options.xtpl and options.delta:
+        return True, XtplDelta(job_type, molecule, options, path, iteration)
+    elif options.xtpl:
+        return True, Xtpl(job_type, molecule, options, path, iteration)
+    elif options.delta:
+        return True, Delta(job_type, molecule, options, path, iteration)
     else:
-        ordered_grads = [deriv[0], deriv[1], deriv[3], deriv[4], deriv[2]]
-        ordered_energies = [energies[0], energies[1], energies[3], energies[4], energies[3]]
-    return ordered_energies, ordered_grads
+        return False, None
+

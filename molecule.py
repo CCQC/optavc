@@ -43,7 +43,7 @@ class Molecule(object):
 
     def set_units(self, units):
         if units == "angstrom" and self.units == "bohr":
-            print(self.geom)
+            # print(self.geom)
             self.units = "angstrom"
             self.geom *= bohr2angstrom
         elif units == "bohr" and self.units == "angstrom":

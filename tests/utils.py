@@ -16,7 +16,7 @@ def options_4_cluster(calc_string):
         'program': 'psi4',
         'energy_regex': r"\s*\*\s*CCSD\(T\)\stotal\senergy\s+=\s*(-\d*.\d*)",
         'maxiter': 100,
-        'cluster': 'Vulcan',
+         # 'cluster': 'Vulcan',
         'name': 'test',
         'nslots': 4,
         'print': 3,
@@ -46,14 +46,14 @@ def options_4_cluster(calc_string):
     if 'sapelo' in socket.gethostname():
         # Not all keywords will be used in each test
         extras = {
-            'cluster': 'Sapelo',
+            'cluster': 'Sapelo_old',
             'queue': 'batch',
             'memory': '10GB',
             'time_limit': '00:10:00'
         }
     elif 'ss-sub' in socket.gethostname():
         extras = {
-            "cluster": 'Sap2test',
+            "cluster": 'Sapelo',
             "queue": "batch",
             "memory": "4GB",
             "time_limit": '00:10:00'
