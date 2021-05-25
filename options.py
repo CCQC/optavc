@@ -8,12 +8,305 @@ from typing import Union
 
 
 class Options(object):
+    """ The only *required* options for a *standard* run of optavc are energy_regex and program. All others are either
+    not required for all jobs or have default values.
+
+    The required options for the extrapolation procedure are xtpl_templates, xtpl_regexes, and xtpl_basis_sets.
+    energy_regex and template_file_path are NOT allowed to fill in xtpl_regexes and xtpl_templates. 
+    program is allowed fill in xtpl_programs.
+
+    The required options for performing an additive correction are delta_templates and delta_regexes.
+    again energy_regex and template_file_path are not allowed to fill in delta_regexes and delta_templates
+
+
+    Notes
+    -----
+    This class is also responsible for setting options in Psi4 that are required for optavc to utilize Psi4
+    properly. Common keywords are max_force_g_convergence, findif_points, hessian_write, cart_hess_read. etc
+    
+    These are keywords related to the finite difference procedure and geometry optimization. NOT keywords related to
+    running a specific calculation: basis_set, e_convergence, etc.
+
+    Attributes
+    ----------
+    
+    template_file_path : string
+        default : 'template.dat'
+        
+        string, interpretable as a path, to a template file
+   
+    backup_template : string or None
+        default : None
+
+        string, interpretable as a path to a secondary template file if the first has failed.
+        This is only invoked when performing a restart. This is invoked either with 
+        *run_optavc("HESS", sow=False)* or *run_optavc("OPT", restart_iteration=<xx>)*
+        For optimizations this only applies to the iteration we restart. It will not persist, so
+        the template_file_path should also be updated to match backup_template. (Only backup_template will 
+        overwrite the currently written template files).
+
+    energy_regex : string
+        python 'raw' string. Should work with multiline mode. Should contain a group which returns
+        the energy itself.
+    
+    self.correction_regexes : string
+        default = ''
+    
+        python 'raw' string. Should work with multiline mode. Should contain a group which returns the energy.
+        This is a simple additive correction to the energy. For instance (T) correlation energy if CCSD(T) is needed.
+        Not usually needed.
+    
+    self.deriv_regex : string
+        default = ''
+
+        python 'raw' string. Should work with multiline mode. Uses a permissive regex to grab the actual values of a
+        gradient. deriv_regex should be written to match the few lines before the gradient. i.e.
+
+        Total Molecular Gradient:
+
+    self.cluster : string
+        default = setter
+        Allowed names for the cluster are vulcan, sapelo, and sapelo_old which are SGE, SLURM, and PBS/TORQUE clusters.
+        if not provided otpavc will use socket.gethostname() to determine what cluster the user is on.
+    
+    self.nslots : int
+        default 4
+    
+        How many threads or tasks the job should be run with. Used to create the cluster submission script
+    
+    self.threads : int
+        default 1
+    
+        WARNING. Experimental. For programs that CLAIM to use mixed MPI and OpenMP parallelism set threads seperately
+        from taks
+    
+    self.scratch : string
+        default 'lscratch'
+    
+        Choose between running on local scratch or a network filesystem. Vulcan has only lscratch. Sapelo has both; 
+        however, lscratch space is limited.
+    
+    self.program : string
+        default ""
+    
+        name of the program to calculations with orca, molpro, psi4, or cfour
+        The name should at least be sufficiently long to load the module with. i.e. cfour@2.0+mpi is sufficient for 
+        vulcan load psi4 is also sufficient isntead of psi4@master.
+    
+    self.parallel : string
+        default = setter
+        
+        For programs like cfour the submission script generated and module loaded by optavc depends on the version.
+        Recognized values are mpi, serial, and mixed. serial encompases openMP parallelism. Mixed uses both and is
+        experimental.
+
+        the setter will attempt first to determine the value for parallel from the name of the program. i.e. cfour2.0+mpi
+        otherwise programs defaults are: mpi for orca and molpro. serial for psi4 and cfour.
+    
+    self.time_limit : string
+        default 10:00:00
+    
+        time limit on vulcan is automatically 2 weeks and this overrides optavc's default.
+    self.queue : string
+        default gen4.q or batch
+    
+    self.email : bool or None
+        Vulcan and Sapelo both use myid. If requred email is automatically determined by $USER
+        EMAIL is only setup for the Sapelo cluster
+    
+    self.email_opts : string
+        default = 'END,FAIL'
+        
+        See documentation for the clusters queueing system for valid values. Optavc will not check.
+        The default is only value for SLURM
+    
+    self.memory : string
+        default '32GB'
+        
+        How much total memory is needed for the Job. Include units. Only used for SAPELO
+    
+    self.name : string
+        default STEP
+        
+        This name may be altered at various levels but is the main prefix for how optavc names jobs.
+        This impacts both directories in the current working directory and job names on the cluster.
+
+    self.files_to_copy : list[string]
+        default []
+        
+        Copy files from the current working directory to the directories for each displacement.
+        Useful for files like GENBAS which can be pulled by default from the cfour install but may need
+        to be overridden
+
+    self.input_name 
+        default 'input.dat'
+
+        what should the template file be named when it is written into a directory.
+        When running cfour the input file will eventually be named ZMAT but this may occur in a tmp directory
+
+    self.output_name : string
+        default 'output.dat'
+        
+    self.input_units : string
+        default "angstrom"
+
+        Make sure to set to bohr if the molecule in your template file. issues will occur and may not be easily
+        recognizable
+
+    self.point_group : string
+        default None
+        optavc will call psi4.reset_point_group(point_group) to make sure the symmetry is being conserved.
+
+    self.dertype : string
+        default ENERGY
+    
+        allowed values are ENERGY or 0, GRADIENT or 1, HESSIAN or 2. Optimizations can be done with 0, or 1.
+        Hessians can be done with 0, 1, or 2
+
+    self.deriv_file : string
+        default 'output'
+
+        What file should we look in to fetch the gradient or hessian. if 'output' the output file is serched with
+        deriv_regex. Otherwise optavc attempts to read a gradient, or hessian file like cfour's GRD file.
+        If program is cfour optavc will force use of the GRD file.
+
+    self.mpi : bool
+        default None
+        
+        WARNING Experimental. Legacy, unmaintained code for submitting singlepoints to slurm as a single mpi process
+    
+    self.job_array : bool
+        defualt False
+
+        Should calculations be submitted in an array or as individual jobs to the cluster. array submission is only
+        supported if cluster is Vulcan. job_array will be set to False for Sapelo.
+    
+    self.resub : bool
+        default False
+
+        Prevents shut down of optavc if a calculation has failed by resubmitting to the cluster's queue. This only
+        affects calculations that are run through the FiniteDifferenceCalc classes.
+
+    self.resub_max : int
+        default None
+    
+        How many times should a singlepoint be resubmitted. Some old molpro issues on specific Sapelo nodes required
+        ths to be set to a relatively large integer. Be careful
+        
+    self.sleepy_sleep_time : int
+        default 60
+
+        Determines the frequency with which optavc will wake up and check the status of its jobs.
+
+    self.xtpl : bool
+        default None
+
+        is an extrapolation to be performed.
+
+    self.maxiter
+        default 20
+
+        This is optavc's internal maxiter. Optkings geom_maxiter should not be obeyed since gradients are being
+        set manually
+
+    self.xtpl_basis_sets : None or List[List[int]]
+        This is a required keyword for performing an extrapolation. Optavc will fail is this is set unnecesarily
+        without the other required keywords.
+
+        list of lists of cardinal numbers for a basis set extrapolation. See composite gradient section for more 
+        details
+        
+        The first list corresponds to extrapolation of a correlated method, the second list is for HF.
+        example [[4, 3], [5, 4, 3]]
+
+    self.xtpl_templates : None or List[List[str]]
+        This is a required keyword for performing an extrapolation. Optavc will fail is this is set unnecesarily
+        without the other required keywords.
+
+        list of lists of strings for templates for a basis set extrapolation. See composite gradient section for more details
+        The first list corresponds to extrapolation of a correlated method, the second list is for HF.
+        example [['template.dat', 'template.dat], ['template1.dat', 'template2.dat']]
+
+    self.xtpl_regexes : None or List[List[str]
+        This is a required keyword for performing an extrapolation. Optavc will fail is this is set unnecesarily
+        without the other required keywords.
+
+        list of lists of raw strings . See composite gradient section for more details
+        The first list corresponds to extrapolation of a correlated method, the second list is for HF.
+        example : [[r'mp2_qz', r'mp2_tz'] [r'hf_5z, r'hf_qz'']]
+
+    self.programs : None or List[List[str]]
+        default setter
+
+        If no value is given. self.program will be applied to every calculation in the extrapolation procedure
+        The first list corresponds to extrapolation of a correlated method, the second list is for HF.
+   
+    self.xtpl_names : None or List[List[str]]
+        default setter
+
+        list of names for each calculation that will be performed. Duplicates are allowed. Default names are dependent
+        on the number of calculations being performed and templates supplied.
+
+    self.xtpl_dertypes : None or List[List[str]]
+        default [[self.dertype, self.dertype], [self.dertype, 'self.dertype]]
+
+        list of strings or integers to determine the type of calculations being submitted. Energy, Gradient or Hessian.
+        If no values are provided all calculations are assumed to match self.dertype which itself defaults to energy
+
+    self.xtpl_queues : None or List[List[str]]
+        default [[self.queue, self.queue], [self.queue, self.queue]]
+
+        If no values are provided, falls back to self.queue which defaults to gen4.q or batch depending on self.cluster
+
+    self.xtpl_nslots : None or List[List[int]]
+        default [[self.nslots, self.nslots], [self.nslots, self.nslots]]
+        
+        see self.nslots for its default value
+
+    self.xtpl_memories : None or List[List[str]]
+        default [[self.memory, self.memory], [self.memory, self.memory]]
+
+        see self.memory for its default
+
+    self.xtpl_parallels : None or List[List[str]]
+        default [[self.parallel, self.parallel], [self.parallel, self.parallel]]
+        
+        see self.parallel for defaults
+
+    self.xtpl_time_limits : None or List[List[str]]
+        default [[self.time_limit, self.time_limit], [self.time_limit, self.time_limit]]
+
+        see self.time_limit for defaults
+
+    self.xtpl_scratches: None or List[List[str]]
+        default [[self.scratch, self.scratch], [self.scratch, self.scratch]]
+
+        self.scratch for default
+
+    self.xtpl_deriv_regexes : None or List[List[str]]
+        default [[self.deriv_regex, self.deriv_regex], [self.deriv_regex, self.deriv_regex]] 
+
+        see.deriv_regex for default
+
+    self.xtpl_deriv_files : None or List[List[str]]
+        default [[self.deriv_file, self.deriv_file], [self.deriv_file, self.deriv_file]] 
+
+    self.scf_xtpl : bool
+        default False
+
+        If false the scf results will not be extrapolatied. The extrapolated correlated result will
+        be added to the scf result of the highest cardinality. Performing HF calculations with smaller basis
+        sets may still be required i.e. with gradients.
+
+    """
+
     def __init__(self, **kwargs):
 
         self.template_file_path = kwargs.pop("template_file_path", "template.dat")
-        self.energy_regex = kwargs.pop("energy_regex", "")
+        self.energy_regex = kwargs.pop("energy_regex")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
         self.deriv_regex = kwargs.pop("deriv_regex", None)
+        self.backup_template = kwargs.pop("backup_template", None)
         # self.success_regex = kwargs.pop("success_regex", "")
         # self.fail_regex = kwargs.pop("fail_regex", "")
 
@@ -22,8 +315,8 @@ class Options(object):
         self.nslots = kwargs.pop("nslots", 4)
         self.threads = kwargs.pop("threads", 1)  # for mixed mpi(nslots)/omp(threads)
         self.scratch = kwargs.pop('scratch', 'lscratch')
-        self.parallel = kwargs.pop("parallel", "")  # default in setter
         self.program = kwargs.pop("program", "")  # no default
+        self.parallel = kwargs.pop("parallel", "")  # default in setter
         self.time_limit = kwargs.pop("time_limit", "10:00:00")
         self.queue = kwargs.pop("queue", "")
         self.email = kwargs.pop("email", None)
@@ -65,7 +358,7 @@ class Options(object):
         self.xtpl_scratches = kwargs.pop("xtpl_scratches", None)  # NON XTPL DEFAULT
         self.scf_xtpl = kwargs.pop("scf_xtpl", False)
         self.xtpl_deriv_regexes = kwargs.pop("xtpl_deriv_regexes", None)
-        self.xtpl_deriv_files = kwargs.pop("xtpl_hessian_files", None)
+        self.xtpl_deriv_files = kwargs.pop("xtpl_deriv_files", None)
         self.enforce_xtpl_option_consistency()
 
         # options for calculations with corrections (correlation correction, relativistic, etc)
@@ -82,7 +375,7 @@ class Options(object):
         self.delta_time_limits = kwargs.pop("delta_time_limits", None)  # NON DELTA DEFAULT
         self.delta_scratches = kwargs.pop("delta_scratches", None)  # NON DELTA DEFAULT
         self.delta_deriv_regexes = kwargs.pop("delta_deriv_regexes", None)
-        self.delta_deriv_files = kwargs.pop("delta_hessian_files", None)
+        self.delta_deriv_files = kwargs.pop("delta_deriv_files", None)
         self.enforce_delta_options_consistency()
 
         if self.mpi is not None:

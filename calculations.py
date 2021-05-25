@@ -1,24 +1,3 @@
-""" 
-Contains the basic calculation class from which a SinglePoint, FiniteDifferencecCalc and 
-Optimization are derived.
-
-Calculation
-Consists of instances of the optavc molecule and inputfile and options classes
-which has some run function.
-Any time a new calculation class is created, a deepcopy of options is performed. 
-
-
-Singlepoint
------------
-
-Since otpavc only performs finite differences by singlepoint, much of the machinery
-lies here. Gradient, and Hessian loop through a list of SinglePoints for most of their
-tasks
-
-Controls writing template files, running individual singlepoints,  
-"""
-
-
 import os
 import subprocess
 import re
@@ -36,13 +15,58 @@ from .cluster import Cluster
 
 
 class Calculation(ABC):
+    """ This is the Base class for everything calculation related in optavc. Its purpose is really to define
+    the API for the write_input, run, get_result, and compute_result methods.
+
+    The basic Hierarchy of Calculation is:
+
+    Optimizations can contain one or more Procedure, FiniteDifferenceCalc, or AnalyticCalc (only 1 at a time)
+
+    Procedures can contain one or more FiniteDifferenceCalc or AnalyticCalc.
+
+    FiniteDifferenceCalc can itself contain one or more AnalyticCalc (always of the same kind)
+
+
+    In this hierarchy any Calculation that consists of other Calculations lower in the hierarchy is able
+    to run all Calculations in parallel through the write_inputs, run, and get_result methods.
+    Calling compute_result repetively will result in non parallel executation of the sub calculations.
+
+    Attributes
+    ----------
+    molecule : molecule.Molecule
+        optavc's custom very basic molecule class that can be interconverted to psi4's molecule
+    options : opions.Object
+        At every level of the Calculation Hierarchy this will become a copy of the higher levels
+        options with (potentially) modifications made by the higher level Calculation.
+    path : str
+        path-like representation of the directory where the Calculation itself will be run
+        changes throughout the Calculation hierarchy
+
+    Methods
+    -------
+    write_input()
+        write ALL input files for the Calculation class. 
+
+    run()
+        run ALL input files contained in the Calculation class. A simple submission of all jobs (at once)
+        to the cluster.
+    
+    get_result()
+        get ALL results for the Calculation class.
+
+self.reap    compute_result()
+        calls write_input, run, and get_result all together. This requires a waiting period between running the
+        calculations and getting the results of course.
+
+    """
+
+
     def __init__(self, molecule, options, path=".", key=None):
         self.molecule = molecule
         self.options = copy.deepcopy(options)
         self.path = os.path.abspath(path)
         self.key = key
         self.dict_obj = {}
-        self.resub_count = 0
 
     def __str__(self):
     
@@ -83,6 +107,8 @@ class Calculation(ABC):
         correct directory and execture the submission script. Enables higher level classes
         to run AnalyticCalculation classes in parallel 
         
+        :meta private:
+
         Returns
         -------
         Union[str, list[str]]: output from submission or list of outputs from submissions
@@ -93,11 +119,15 @@ class Calculation(ABC):
     @abstractmethod
     def get_result(self, force_resub=False, skip_wait=False):
         """getter for the final result of a Calculation. Run or compute_result must already have 
-        been executed """
+        been executed 
+        
+        :meta private:
+
+        """
         pass
 
     @abstractmethod
-    def write_input(self):
+    def write_input(self, backup=False):
         pass
 
     def compute_result(self):
@@ -105,6 +135,7 @@ class Calculation(ABC):
         Collect results for any and all Calculations 
         AnalyticCalc and FindifCalc reimplement this with better ways to wait. The Procedure class
         does simply inherit this.
+        :meta private:
         """ 
         self.write_input()
         self.run()
@@ -113,11 +144,39 @@ class Calculation(ABC):
 
 
 class AnalyticCalc(Calculation):
-    """Parent class for the two real types of calculations that can be run. All other child classes will have one or
-    more instances of AnalyticCalc. 
+    """Parent class for the three real types of calculations that can be run. All other child classes will have one or
+    more instances of AnalyticCalc or instances of classes that have instances of AnalyticCalc. 
     
-    This class contains the necessary code to perform the actual execution of Gradients and Singlepoints.
+    This class contains the necessary code to perform the actual execution of Gradients, Singlepoints, and Hessians.
     For result collection please see AnalyticGradient and Singlepoint child classes
+
+    Still cannot be instantiated: the abstract method get_result is not implemented here.
+
+    Attributes
+    ----------
+    self.cluster : cluster.Cluster
+        a class that manages how a Calculation is able to interact with the Cluster queueing a submission
+        system
+    self.resub_count : int
+        keeps track of whether we have exceed Options.resub_max for each Calculation
+    
+    Methods
+    -------
+    run()
+        This is the base implementation of run. calls cluster.submit or tries to execute the program
+        on the host in a somewhat standard fashion (not guarranteed to work). The working directory
+        must be changed to where the input has been written (the path of the Calculation) and then 
+        returns to the directory of the Parent Calculation. Returns the job_id (or zero) if no cluster id
+        Parent implemenations generally just call this method for each of their Calculation objects.
+
+    write_input()
+        This is the base implementation of write_input. Updates the input file object with
+        this calculations molecule information, then writes it to the location given to this
+        calculation by its Parent Calculation. Copy any other files needed.
+        Parent implemenations generally just call this method for each of their Calculation objects.
+
+    wait_for_calculation()
+        uses Options.sleepy_sleep_time to hold until this specific calculation is finished
 
     """
 
@@ -134,14 +193,18 @@ class AnalyticCalc(Calculation):
             self.cluster = None
         else:
             self.cluster = Cluster(self.options.cluster)
-
+        
+        self.resub_count = 0
         self.job_num = None
 
     def run(self):
         """ Change to singlepoint directory. Effect is to invoke subprocess 
+        
+        :meta private:
+        
         Returns
         -------
-        str : output captured from qsub *.sh """
+        str : output captured from qsub <name>.sh """
 
         working_directory = os.getcwd()
         os.chdir(self.path)
@@ -164,16 +227,26 @@ class AnalyticCalc(Calculation):
         self.job_num = output
         return output
 
-    def write_input(self):
+    def write_input(self, backup=False):
         """ Uses template.InputFile.make_input() to replace the geometry in
         the user provided template file. Writes input file to the calculations
         directory
+        
+        :meta private:
+        
         """
 
         if not os.path.exists(self.path):
             os.makedirs(self.path)
         self.molecule.set_units(self.options.input_units)
-        input_text = self.inp_file_obj.make_input(self.molecule.geom)
+        
+        if backup:
+            backup_template_str = open(self.options.backup_template).read()
+            tfp = TemplateFileProcessor(backup_template_str, self.options)
+            input_text = tfp.make_input(self.molecule.geom)
+        else:
+            input_text = self.inp_file_obj.make_input(self.molecule.geom)
+
         input_path = os.path.join(self.path, self.options.input_name)
         input_file = open(input_path, 'w')
         input_file.write(input_text)
@@ -260,7 +333,19 @@ class AnalyticCalc(Calculation):
                                  f" {regex_str}")
 
 class SinglePoint(AnalyticCalc):
-    """ Handles lookup of the result for a Singlepoint """
+    """ Handles lookup of the result for a Singlepoint. Extends AnalyticCalculation by adding the get_result
+    behavior for a Singlepoint.
+
+    Attributes
+    ----------
+    self.disp_num : int
+
+    Methods
+    -------
+    get_result()
+        get the energy (with a correction if needed) from an output file.
+
+    """
 
     
     def __init__(self, molecule, inp_file_obj, options, path=".", disp_num=1, key=None):
@@ -269,7 +354,11 @@ class SinglePoint(AnalyticCalc):
         self.file_not_found_behavior = f"Could not open output file for singlepoint: {self.disp_num}"
 
     def get_result(self):
-        """ Use regex module to find and return energy with any necessary corrections"""
+        """ Use regex module to find and return energy with any necessary corrections
+
+        :meta private:
+
+        """
 
         if not self.check_status(self.options.energy_regex):
             return None 
@@ -291,6 +380,9 @@ class SinglePoint(AnalyticCalc):
     def check_resub(self):
         """ Check/test the resubmission feature. Searches for the 'Giraffe' inserted by
         'insert_Giraffe' function.
+        
+        :meta private:
+        
         Parameters
         ----------
         N/A
@@ -305,6 +397,9 @@ class SinglePoint(AnalyticCalc):
     def insert_Giraffe(self):
         """ Inserts the string 'Giraffe' into all output files. Useful for testing regex
         dependent methods as a proof of concept.
+        
+        :meta private:
+
         Parameters
         ----------
         N/A
@@ -321,9 +416,20 @@ class SinglePoint(AnalyticCalc):
 class AnalyticGradient(AnalyticCalc):
     """ This class was implemented in order to use CFour's analytic gradients with the psi4 CBS
     procedure. CCSD(T) gradients from CFour are not available through the Psi4/CFour interface.
-    
-    Handles the lookup of output from a Gradient calculation. Adds the ability to wait for a calculation
-    to finish on the cluster before getting a result. 
+  
+    Uses psi4.qcdb to rotate / align the gradient and molecule back into optavc's molecular
+    orientation if using cfour gradients.
+
+    Methods
+    -------
+    get_result()
+        This is the first class in the hierarchy that is really meant to just be run without management by
+        a Parent class. Therefore if the calculation is not finished, optavc will check the queue for this
+        job at intervals. returns a numpy array
+
+    get_reference_energy()
+        All classes at a higher level than this in the hierarchy will now need the energy seperate from the
+        result
 
     """
 
@@ -348,7 +454,9 @@ class AnalyticGradient(AnalyticCalc):
 
     def get_result(self, force_resub=False):
         """ Gets the gradient according to method specified by user
-    
+   
+        :meta private:
+
         Returns
         -------
         np.ndarray
@@ -394,6 +502,8 @@ class AnalyticGradient(AnalyticCalc):
     def get_reference_energy(self):
         """ Get reference energy from gradient calculation
 
+        :meta private:
+        
         Returns
         -------
         float
@@ -453,8 +563,7 @@ class AnalyticGradient(AnalyticCalc):
 class AnalyticHessian(AnalyticCalc):
     """ This class was implemented in order to use CFour's analytic hessians with the psi4 CBS
     
-    Handles the lookup of output from a Hessian calculation. Adds the ability to wait for a calculation
-    to finish on the cluster before getting a result. 
+    This class performs the same functionality as AnalyticGradient. See docs.
 
     """
 
@@ -473,6 +582,8 @@ class AnalyticHessian(AnalyticCalc):
     def get_result(self, force_resub=False):
         """ Gets the hessian according to method specified by user
     
+        :meta private:
+        
         Returns
         -------
         np.ndarray
