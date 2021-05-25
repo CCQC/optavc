@@ -20,31 +20,44 @@ from . import xtpl
 from .template import TemplateFileProcessor
 from .calculations import AnalyticHessian
 
-def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, sow=True, path=".",
-               test_input=False, molecule=None):
-    """ optavc driver meant to unify input. Create options object, needed template objects, start
-    Hessian or Optimization calculation
+def run_optavc(jobtype, 
+               options_dict, 
+               restart_iteration=0, 
+               xtpl_restart=None, 
+               sow=True, 
+               path=".",
+               test_input=False, 
+               molecule=None):
+    """Optavc driver to unify and simplify input. This is the only internal method of optavc a user should need to 
+    interact with. Creates any needed internal class objects based on the provided dictionary.
+
+    Performs an Optimization or Hessian calculation
 
     Parameters
     ----------
     jobtype: str
-        generous with available strings for optimziation / hessian
+        upper and lowercase variants of HESS, FREQUENCY, FREQUENCIES, HESSIAN, OPT, and OPTIMIZATION are allowed    
     options_dict: dict
-        should contain BOTH optavc and psi4 options
+        should contain BOTH optavc and psi4 options for optking and the finite difference proecedure.
+        should not contain ANY options relevant for the calculations that optking will submit.
     restart_iteration: int
-        corresponds to the iteration we should begin trying to sow gradients for
-    xtpl_restart: str
-        should be ['high_corr', 'large_basis', 'med_basis', 'small_basis']
+        For optimizations only. orresponds to the iteration we should begin trying to sow gradients for
     sow: bool
-        if False optavc will try to reap only
+        For hessians only. if False optavc will reap the hessian.
     path: str
-        for Hessian jobs only
-    test_input: bool, optional
-        call test_singlepoints
+        for Hessians only. Specifies where to write displacement directories.
+    test_input: bool
+        Check all calculation in STEP00, HESS, or otherwise. This is a good way to test that the energy regex
+        is working as expected. Raises an AssertionError if optavc considers any calculations to have failed.
 
     Returns
     -------
-    True : if job exited successfully
+    result : list[int] or list[list[int]]
+        the gradient after optimization the hessian after a hessian calculation
+    energy : int
+        final energy or energy of non displaced point
+    molecule : molecule.Molecule
+        final molecule.
     """
 
     options_obj = Options(**options_dict)
@@ -100,7 +113,7 @@ def run_optavc(jobtype, options_dict, restart_iteration=0, xtpl_restart=None, so
 
         psi4.core.print_out("\nThe final computed hessian is:\n\n")        
         psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
-        wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
+        wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'def2-tzvp')
         wfn.set_hessian(psi4.core.Matrix.from_array(hess_obj.result))
         wfn.set_energy(hess_obj.energy)
         psi4.core.set_variable("CURRENT ENERGY", hess_obj.energy)

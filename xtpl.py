@@ -10,8 +10,16 @@ from .calculations import AnalyticCalc, Calculation, AnalyticGradient, AnalyticH
 
 
 class Procedure(Calculation):
-    """ A procedure may be thought of as a list of Calculations and a list of instructions 'SOW'
-    and 'REAP' to enable calculating a series of Calculations """
+    """ A Procedure may be thought of as a list of Calculations with a matching list of instructions 'SOW'
+    and 'REAP' to enable calculating a series of unique Calculations. 
+
+    Creates AnalyticGradient, AnalyticHessian, Gradient (Finite Difference), and Hessian (Finite Difference) Calculation
+    objects and runs them in parallel run. 
+
+    This is a really just a framework for the Xtpl and Delta classes below. Would need to be generalized to implement
+    new Procedures.
+
+    """
 
     def __init__(self, job_type, molecule, procedure_options, path="./HESS", iteration=0):
 
@@ -23,6 +31,8 @@ class Procedure(Calculation):
 
         self.energy = None
         self.result = None
+        self.procedure = None
+        self.calc_objects = None
 
     def _create_calc_objects(self):
         """ Use all the options for the procedures many calculations and Procedure attributes to
@@ -67,7 +77,6 @@ class Procedure(Calculation):
 
             if self.job_type == 'HESSIAN':
                 if options.dertype == 'HESSIAN':
-                    print("We have reached this point")
                     calc_objects.append(AnalyticHessian(self.molecule,
                                                         input_file, 
                                                         options,
@@ -131,7 +140,7 @@ class Procedure(Calculation):
                     raise ValueError("Procedure cannot run calculations that aren't of type AnalyticCalc or FindifCalc")
         return unique
 
-    def write_input(self):
+    def write_input(self, backup=False):
         for calc in self.unique_calculations():
             calc.write_input()
 
@@ -152,7 +161,28 @@ class Procedure(Calculation):
         return [calc.get_result(force_resub) for calc in self.calc_objects]
 
 class Xtpl(Procedure):
+    """ A child class of Procedure. 
 
+    Represents a basis set extrapolation of gradients or hessians. This creates
+    the Calculation objects needed to perform each individual calculation.
+
+    Attributes
+    ----------
+    self.xtpl_option_list : list
+        all xtpl_<option> options. These will be used to create more specific Options objects
+        for the individual calculations
+
+
+    Methods
+    -------
+
+    get_result(force_resub=False)
+        collects all gradients or hessians in self.calculations and performs the basis set
+        extrapolation as described by Options.xtpl_basis_sets and Options.xtpl_scf.
+        Always performs a two point correlation energy extrapolation and can be either
+        2 point, 3 point or largest (additive) basis set extrapolation.
+    
+    """
     def __init__(self, job_type, molecule, procedure_options, path="./HESS", iteration=0):
         self.xtpl_option_list = [procedure_options.xtpl_regexes,
                                  procedure_options.xtpl_templates,
@@ -274,6 +304,30 @@ class Xtpl(Procedure):
         return self.result
 
 class Delta(Procedure):
+    """ Child class of Procedure to represent performing an arbitrary number of additive corrections
+    to gradients and hessians.
+
+    This class is not really meant to be a called without Xtpl. Please use XtplDelta.
+
+    Attributes
+    ----------
+    self.delta_options_list : List
+        All of the delta_<option> options in the standard format of a list of two dimensional corrections.
+        These options will be used to create a series of Options objects by setting the corresponding
+        standard options with the delta options entries.
+
+        Assumes the Options object contins only properly formatted options.
+    
+    Methods
+    -------
+    self.return_result
+
+        Takes a simple difference between the first item in a two dimensional correction and the second. All corrections
+        are then summed together and the sum is taken as the result
+
+
+    """
+
 
     def __init__(self, job_type, molecule, procedure_options, path="./HESS", iteration=0):
         self.delta_option_list = [procedure_options.delta_regexes,
@@ -334,6 +388,15 @@ class Delta(Procedure):
         
 
 class XtplDelta(Procedure):
+    """ A Procedure written to run the Xtpl and Delta Procedures in parallel. Creates the Xtpl and Delta
+    
+    Seqentially calls write_input, run, and get_result for the Xtpl and Delta procedures. Adds the results from
+    Xtpl and Delta together.
+
+    #TODO this should be rewritten to utlilize the _reap_sow_ordering and unique_calculations methods in the
+    base class to eliminiate redundant calculations between the Xtpl and Delta classes
+
+    """
 
     def __init__(self, job_type, molecule, procedure_options, path="./HESS", iteration=0):
         super().__init__(job_type, molecule, procedure_options, path)
@@ -349,7 +412,7 @@ class XtplDelta(Procedure):
         self.xtpl_procedure.run()
         self.delta_procedure.run()
 
-    def write_input(self):
+    def write_input(self, backup=False):
         self.xtpl_procedure.write_input()
         self.delta_procedure.write_input()
 
@@ -378,6 +441,9 @@ def xtpl_delta_wrapper(job_type, molecule, options, path='./HESS', iteration=0):
     elif options.xtpl:
         return True, Xtpl(job_type, molecule, options, path, iteration)
     elif options.delta:
+        raise NotImplementedError("Can't just perform a correction."
+                                  "You probably want to perform an XtplDelta calculation if you're "
+                                  "looking to use the Delta functionality.")
         return True, Delta(job_type, molecule, options, path, iteration)
     else:
         return False, None

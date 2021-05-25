@@ -13,6 +13,15 @@ class FiniteDifferenceCalc(Calculation):
     """ A Calculation consisting of a series of AnalyticCalc objects with needed machinery to submit,
     collect and assemble these calculations.
     
+    One of two basic child classes of Calculation that holds a list of Calculations. This class is
+    interfaced with Psi4's finite difference machinary in order to create calculations for each needed
+    displacement.
+
+    Most of the complexity of the Finite Difference Algorithms exists within this class due to the difficulty
+    encountered in resubmitting jobs on the Sapelo cluster.
+
+    Provides basic functionality for the Gradient and Hessian child classes.
+
     Attributes
     ----------
 
@@ -77,7 +86,12 @@ class FiniteDifferenceCalc(Calculation):
         if not self.result:
             self.reap(force_resub)
             self.build_findif_dict()
-        return self.result.np
+
+        if isinstance(self.result, np.ndarray):
+            return self.result
+        else:
+            #psi4.core.Matrix
+            return self.result.np
 
     def get_reference_energy(self):
         """Get result stored in the finite difference dictionary
@@ -93,9 +107,9 @@ class FiniteDifferenceCalc(Calculation):
             print("Energy not yet computed -- did you remember to run compute_gradient() first?")
             raise
 
-    def write_input(self):
+    def write_input(self, backup=False):
         for calc in self.calculations:
-            calc.write_input()
+            calc.write_input(backup)
 
     def run_individual(self):
         """ Run analytic calculations for finite difference procedure
@@ -143,8 +157,10 @@ class FiniteDifferenceCalc(Calculation):
 
     def reap(self, force_resub=False):
         """ Collect results for all calculations. Resub if necessary and if allowed 
-            This method assumes that we have alredy told optavc to sleep after submitting all of our jobs. If called and
-            jobs have not finished. Keep waiting
+            This method assumes that we have already told optavc to sleep after submitting all of our jobs. This is the
+            required downtime between submission and checking the cluster, which can result in error. 
+            Not the down time for intermitently checking whether the job has finished. 
+            If called and jobs have not finished. Keep waiting
         """
 
         check_every = self.cluster.resub_delay(self.options.sleepy_sleep_time)
@@ -182,81 +198,6 @@ class FiniteDifferenceCalc(Calculation):
         # should have been called many times already.
         self.build_findif_dict()
 
-
-
-        # # collect failures could be True because we just started or because there are failures present
-        # while self.collect_failures():
-        #     if self.options.resub:
-        #         self.resub(force_resub)
-        #         force_resub=False
-
-        #     # simple get_results
-        #     results = []
-        #     for calc in enumerate(self.calculations):
-        #         if itr == 0:
-        #             results.append(calc.get_result(skip_wait=False))  # first one wait in case of cluster delay
-        #         else:
-        #             # This still waits for the job to finish but does not need to wait fo the cluster to
-        #             # receive the job
-        #             results.append(calc.get_result(skip_wait=True))
-
-        # self.build_findif_dict()    
-
-    # def reap(self, force_resub=False, skip_wait=False):
-    #     """ Once all calculations have finished, collect and place in self.findifrec.
-    #     Child classes will use self.findifrec to construct the result
-
-    #     Raises
-    #     ------
-    #     RuntimeError : if not able to find status of jobs during resub attempt
-
-    #     """
-
-    #     check_every = self.cluster.resub_delay(self.options.sleepy_sleep_time)
-    #     quit = False
-    #     print(f"checking resub option: {self.options.resub}")
-    #     while self.collect_failures():
-    #         if self.options.resub:
-    #             self.resub(force_resub, skip_wait)
-    #             force_resub = False  # only try (at most) 1 forced resubmit
-    #             # use minimum time or user's defined time
-    #             time.sleep(check_every)
-    #         else:
-    #             # coder should always add a wait before calling query_cluster
-    #             if not self.options.job_array:
-    #                 if not skip_wait: 
-    #                     time.sleep(self.cluster.wait_time)
-    #                 for itr, calculation in enumerate(self.calculations):
-    #                     finished, _ = self.cluster.query_cluster(self.job_ids[itr], self.options.job_array)
-    #                     self.collect_failures()
-    #                     if finished and calculation in self.failed:
-    #                         if not calculation.check_status(calculation.options.energy_regex):
-    #                             print(f"Resub has not been turned on. The following jobs are currently marked"
-    #                                   f"as failed: "
-    #                                   f"{[calc.disp_num for calc in self.failed]}"""
-    #                                   f"calculation {itr} - {calculation} has triggered this message") 
-    #                             raise RuntimeError("Jobs have finished but one or more have failed")
-    #                     else:
-    #                         time.sleep(check_every)
-    #             else:
-    #                 if not skip_wait:
-    #                     time.sleep(self.cluster.wait_time)
-    #                 finished, _ = self.cluster.query_cluster(self.job_ids[0], self.options.job_array)
-
-    #                 if finished:
-    #                     for itr, calculation in enumerate(self.calculations):
-    #                         self.collect_failures()
-    #                         if calculation in self.failed:
-    #                             if not calculation.check_status(calculation.options.energy_regex):
-    #                                 print(f"calculation {itr} has failed")
-    #                                 raise RuntimeError(f"array has finished but one or more have failed")
-    #                 else:
-    #                     time.sleep(check_every)
-
-    #     # This code may only be reached if self.collect_failures() is empty. check_status
-    #     # should have been called many times already.
-    #     self.build_findif_dict()
-
     def resub(self, force_resub=False):
         """ Rerun each calculation in self.failed as an individual job. """
             
@@ -264,6 +205,10 @@ class FiniteDifferenceCalc(Calculation):
             # Immediately rerun all failed jobs if calculations were previously submitted as an
             # array OR if performing restart and could not reap.
             # Must fill in job_ids to prevent jobs from being resubmitted on next call of resub
+            if self.options.backup_template:
+                for calc in self.failed:
+                    calc.write_input(backup=True)
+
             self.job_ids = [calc.run() for calc in self.failed]
             print(f"\nForced resubmit is on. Cannot reap needed calculations")
             print(f"Job IDS for forced resubmit\n{self.job_ids}\n")
@@ -382,7 +327,14 @@ class FiniteDifferenceCalc(Calculation):
 
 
 class Gradient(FiniteDifferenceCalc):
-    """Machinary to create inputs and collect results for running a gradient using Singlepoints"""
+    """Machinary to create inputs and collect results for running a gradient using Singlepoints. 
+
+    As noted else where, as one of the Parent Classes, Gradient uses the write_input, run, and get_result
+    methods for the Child class to perform the Singlepoint calculations in parallel.
+
+    Compatible with the Finite Difference machinary for Psi4 < 1.3.2 and > 1.4
+
+    """
 
     def __init__(self, molecule, input_obj, options, path):
         super().__init__(molecule, input_obj, options, path)
@@ -468,7 +420,7 @@ class Gradient(FiniteDifferenceCalc):
 
 
 class Hessian(FiniteDifferenceCalc):
-    """Machinery to create inputs and collect results for a Hessian for any type of AnalyticCalc"""
+    """Machinery to create inputs and collect results for a Hessian for any type of AnalyticCalc. """
 
     def __init__(self, molecule, input_obj, options, path):
         super().__init__(molecule, input_obj, options, path)
@@ -544,20 +496,4 @@ class Hessian(FiniteDifferenceCalc):
                 self.energy = self.get_reference_energy()  # for use in main.py
             else:
                 self.findifrec['displacements'][key][calc_type] = result
-
-    # @staticmethod
-    # def psi4_frequencies(psi4_mol_obj, result, energy):
-    #     # Could we get the global_option basis? Yes.
-    #     # Would we need to set it, just for this? Yes.
-    #     # Does it mean anything. No, not with our application.
-
-    #     if isinstance(result, np.ndarray):
-    #         result = psi4.core.Matrix.from_array(result)
-
-    #     wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sto-3g')
-    #     wfn.set_hessian(result)
-    #     wfn.set_energy(energy)
-    #     psi4.core.set_variable("CURRENT ENERGY", energy)
-    #     psi4.driver.vibanal_wfn(wfn)
-    #     psi4.driver._hessian_write(wfn)
 
