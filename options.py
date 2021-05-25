@@ -315,8 +315,8 @@ class Options(object):
         self.nslots = kwargs.pop("nslots", 4)
         self.threads = kwargs.pop("threads", 1)  # for mixed mpi(nslots)/omp(threads)
         self.scratch = kwargs.pop('scratch', 'lscratch')
-        self.program = kwargs.pop("program", "")  # no default
         self.parallel = kwargs.pop("parallel", "")  # default in setter
+        self.program = kwargs.pop("program", "")  # no default
         self.time_limit = kwargs.pop("time_limit", "10:00:00")
         self.queue = kwargs.pop("queue", "")
         self.email = kwargs.pop("email", None)
