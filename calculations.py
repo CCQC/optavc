@@ -12,7 +12,7 @@ from psi4.core import Matrix
 from psi4.driver.qcdb import cfour, hessparse 
 
 from .cluster import Cluster
-
+from .template import TemplateFileProcessor
 
 class Calculation(ABC):
     """ This is the Base class for everything calculation related in optavc. Its purpose is really to define
@@ -242,7 +242,7 @@ class AnalyticCalc(Calculation):
         
         if backup:
             backup_template_str = open(self.options.backup_template).read()
-            tfp = TemplateFileProcessor(backup_template_str, self.options)
+            tfp = TemplateFileProcessor(backup_template_str, self.options).input_file_object
             input_text = tfp.make_input(self.molecule.geom)
         else:
             input_text = self.inp_file_obj.make_input(self.molecule.geom)
