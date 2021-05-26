@@ -99,8 +99,7 @@ class TemplateFileProcessor(object):
             header, footer = file_string[:start], file_string[end:]
             # Replace any curly braces with double braces to prevent formatting them
             coord_str = coord_str.replace('{', '{{').replace('}', '}}')
-            body_template = re.sub('\s*(-?\d+\.?\d*)', ' {:> 17.12f}',
-                                   coord_str)
+            body_template = re.sub('\s*(-?\d+\.\d*)', ' {:> 17.12f}', coord_str)
 
         self.molecule = Molecule(xyzstring)
         self.input_file_object = InputFile(header, footer, body_template)
