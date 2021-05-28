@@ -2,12 +2,18 @@
 # to perform the actual running of the program
 # Taken from submit scripts written by J. Turney
 
+fermi = """module load intel/19.0.1
+export PATH=$PATH:/home/vulcan/aroeira/julia
+
+julia {input_name} --threads $NSLOTS
+
+"""
 
 molpro = """vulcan load molpro@2010.1.67+mpi
-molpro -n $NSLOTS --nouse-logfile --no-xml-output -o output.dat input.dat"""
+molpro -n $NSLOTS --nouse-logfile --no-xml-output -o {output_name} {input_name}"""
 
 molpro_mixed = """vulcan load molpro@2010.1.67+mpi
-molpro -n $NSLOTS -t $THREADS --nouse-logfile --no-xml-output -o output.dat input.dat"""
+molpro -n $NSLOTS -t $THREADS --nouse-logfile --no-xml-output -o {output_name} {input_name}"""
 
 psi4 = """vulcan load psi4@master
 psi4 -n $NSLOTS
@@ -35,7 +41,7 @@ echo " Running orca on `hostname`"
 echo " Running calculation..."
 
 cd $TMPDIR
-$prefix/bin/orca input.dat >& $SGE_O_WORKDIR/output.dat || exit 1
+$prefix/bin/orca {input_name} >& $SGE_O_WORKDIR/{output_name} || exit 1
 
 echo " Saving data and cleaning up..."
 # delete any temporary files that my be hanging around.
@@ -77,7 +83,7 @@ echo " Running cfour on `hostname`"
 echo " Running calculation..."
 
 cd $scratch
-xcfour >& $SGE_O_WORKDIR/output.dat
+xcfour >& $SGE_O_WORKDIR/{output_name}
 xja2fja
 /opt/scripts/cfour2avogadro $SGE_O_WORKDIR/output.dat
 
@@ -112,7 +118,8 @@ progdict = {
     "serial": {
         "scratch": {
             "psi4": psi4,
-            "cfour": cfour_serial
+            "cfour": cfour_serial,
+            "fermi": fermi
         }
     },
     "mpi": {

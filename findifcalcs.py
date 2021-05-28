@@ -179,7 +179,7 @@ class FiniteDifferenceCalc(Calculation):
                                      f'{self.options.name}: {self.failed}')
                 # coder should always add a wait before calling query_cluster
                 for itr, calculation in enumerate(self.calculations):
-                    finished, _ = self.cluster.query_cluster(self.job_ids[itr])
+                    finished, _ = self.cluster.query_cluster(self.job_ids[itr], self.options.job_array)
 
                     if finished and calculation in self.failed:
                         if not calculation.check_status(calculation.options.energy_regex):
@@ -223,7 +223,7 @@ class FiniteDifferenceCalc(Calculation):
         # time.sleep(self.cluster.wait_time)  # as noted above. always wait before beginning to 
         for job in self.job_ids:
             
-            finished, job_num = self.cluster.query_cluster(job)
+            finished, job_num = self.cluster.query_cluster(job, self.options.job_array)
             print(f"for job: {job}. state is {finished}. job_num is {job_num}")
             if not finished:
                 # Jobs are only considered for resubmission if the cluster has marked as finished
