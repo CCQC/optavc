@@ -108,7 +108,7 @@ class Cluster:
         text_output = process.stdout
         return self.get_job_id(text_output, options.job_array)
 
-    def query_cluster(self, job_id, job_array=True):
+    def query_cluster(self, job_id, job_array=False):
         """ use subprocess to get detailed information on a single job. output must be interpreted
         in cluster by cluster basis.
 
@@ -299,6 +299,18 @@ class Cluster:
             'threads': options.threads
         }
 
+        # Handle various programs ability to set input file names
+        # cfour only allows ZMAT for the input name. We copy inpu.dat to ZMAT to adjust for this
+        # fermi does it's own thing with output files. output_name needs to match! up to the user
+        if progname == 'cfour':
+            in_out = {'output_name': options.output_name}
+        elif progname == 'fermi':
+            in_out = {'input_name': options.input_name}
+        else:
+            in_out = {'input_name': options.input_name, 'output_name': options.output_name}
+
+        print(f"input and output values {in_out}")
+
         if self.cluster_name in ['SAPELO', "SAPELO_OLD"]:
 
             scratch = options.scratch.lower()
@@ -318,19 +330,24 @@ class Cluster:
                     constraint = 'EPYC|Intel'
 
                 prog = sapelo_programs.progdict.get(options.parallel).get(scratch).get(progname)
+                prog = prog.format(**in_out)
                 odict.update({'prog': prog, 'constraint': constraint})
 
             else:
                 prog = sapelo_old_programs.progdict.get(options.parallel).get(scratch).get(progname)
+                prog = prog.format(**in_out)
                 odict.update({'prog': prog})
 
         elif self.cluster_name == 'VULCAN':
             
             prog = vulcan_programs.progdict.get(options.parallel).get(scratch).get(progname)
+            prog = prog.format(**in_out)
             odict.update({'prog': prog})
 
             if options.job_array:
                 odict.update({'tc': str(job_num)})
+
+        print(f"formatting template with the follwing options: {odict}")
 
         return template.format(**odict)
 

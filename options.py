@@ -303,7 +303,7 @@ class Options(object):
     def __init__(self, **kwargs):
 
         self.template_file_path = kwargs.pop("template_file_path", "template.dat")
-        self.energy_regex = kwargs.pop("energy_regex")
+        self.energy_regex = kwargs.pop("energy_regex", "")
         self.correction_regexes = kwargs.pop("correction_regexes", "")
         self.deriv_regex = kwargs.pop("deriv_regex", None)
         self.backup_template = kwargs.pop("backup_template", None)
@@ -326,7 +326,7 @@ class Options(object):
 
         self.files_to_copy = kwargs.pop("files_to_copy", [])
         self.input_name = kwargs.pop("input_name", "input.dat")
-        self.output_name = kwargs.pop("output_name", "output.dat")
+        self.output_name = kwargs.pop("output_name", None)
         self.input_units = kwargs.pop("input_units", "angstrom")
         self.point_group = kwargs.pop("point_group", None)
 
@@ -405,24 +405,28 @@ class Options(object):
         prog = val.split("@")
         self._program = prog[0]
 
-        if not self.parallel: 
+        if prog[0] == 'fermi':
+            raise NotImplementedError("Fermi submit scripts have not been finalized.")
+
+        if prog[0] in ['psi4', 'fermi']:
+            self.parallel = 'serial'
+        elif prog[0] == 'orca':
+            self.parallel = 'mpi'
+
+        if not self.parallel:
             if '+mpi' in prog[-1]:
                 self.parallel = 'mpi'
             elif 'serial' in prog[-1]:
                 self.parallel = 'serial'
             elif '~mpi' in prog[-1]:
                 self.parallel = 'serial'
-            elif prog[0] == 'psi4':
-                self.parallel = 'serial'
-            elif prog[0] == 'orca':
-                self.parallel = 'mpi'
             elif prog[0] == 'molpro':
                 if self.threads > 1:
                     self.parallel = 'mixed'
                 else:
                     self.parallel = 'mpi'
             elif prog[0] == 'cfour':
-                self.parallel = 'serial' # should be safe default          
+                self.parallel = 'serial' # should be safe default
 
     @property
     def cluster(self):
@@ -473,6 +477,21 @@ class Options(object):
         else:
             self._input_name = val
     
+    @property
+    def output_name(self):
+        return self._output_name
+
+    @output_name.setter
+    def output_name(self, val):
+        if not val:
+            if self.program == 'fermi':
+                val = 'fermi.out'
+            else:
+                val = 'output.dat'
+
+        self._output_name = val
+            
+
     @property
     def wait_time(self):
         return self._wait_time

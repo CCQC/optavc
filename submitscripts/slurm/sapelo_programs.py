@@ -1,6 +1,13 @@
 # use sapelo2 work area (called scratch)
 # no need to copy set psi_scratch variable
 
+fermi = """ module load Julia/1.6.1-linux-x86_64
+module load intel/2019b
+
+julia {input_name} 
+
+"""
+
 psi4 = """module load PSI4/1.3.2_conda
  
 export PSI_SCRATCH=/scratch/$USER/tmp/$SLURM_JOB_ID
@@ -18,7 +25,7 @@ psi4_lscratch = """module load PSI4/1.3.2_conda
 export PSI_SCRATCH=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $PSI_SCRATCH
 
-psi4 -n $NSLOTS
+psi4 {input_name} -n $NSLOTS --output {output_name}
 
 rm $PSI_SCRATCH -r
 """
@@ -32,7 +39,7 @@ export PATH=$PATH:/work/jttlab/molpro/2010/bin/
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scrath_dir
 
-time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output output.dat --directory $scratch_dir input.dat
+time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
 
 tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
 rm $scratch_dir
@@ -48,7 +55,7 @@ export PATH=$PATH:/work/jttlab/molpro/2010/bin/
 scratch_dir=/lscratch/$USER/tmp/$SLRUM_JOB_ID
 mkdir -p $scratch_dir
 
-time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output output.dat --directory $scratch_dir input.dat
+time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
 
 tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
 rm $scratch_dir -r
@@ -62,7 +69,7 @@ export PATH=$PATH:/work/jttlab/molpro/2010/bin/
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir 
 
-time molpro -n $NSLOTS -n -t $THREADS --nouse-logfile --no-xml-output --output $SLURM_SUBMIT_DIR/output.dat --directory $scratch_dir input.dat
+time molpro -n $NSLOTS -n -t $THREADS --nouse-logfile --no-xml-output --output $SLURM_SUBMIT_DIR/{output_name} --directory $scratch_dir {input_name}
 
 tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
 rm $scratch_dir -r
@@ -77,7 +84,7 @@ export PATH=$PATH:/work/jttlab/molpro/2010/bin/
 scratch_dir=/lscratch/$USER/tmp/$SLRUM_JOB_ID
 mkdir -p $scratch_dir
 
-time molpro -n $NSLOTS -t $THREADS --nouse-logfile --no-xml-output --output output.dat --directory $scratch_dir input.dat
+time molpro -n $NSLOTS -t $THREADS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
 
 tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
 rm $scratch_dir -r
@@ -102,7 +109,7 @@ echo " Running orca on `hostname`"
 echo " Running calculation..."
 
 cd $scratch_dir
-orca input.dat >& $SLURM_SUBMIT_DIR/output.dat || exit 1
+orca {input_name} >& $SLURM_SUBMIT_DIR/{output_name} || exit 1
 
 echo " Saving data and cleaning up..."
 # delete any temporary files that my be hanging around.
@@ -153,7 +160,7 @@ echo " Running cfour on `hostname`"
 echo " Running calculation..."
 
 cd $scratch_dir
-xcfour >& $SLURM_SUBMIT_DIR/output.dat
+xcfour >& $SLURM_SUBMIT_DIR/{output_name}
 xja2fja
 
 echo " Saving data and cleaning up..."
@@ -208,11 +215,12 @@ progdict = {
         "lscratch": {
             "psi4": psi4_lscratch,
             "cfour": cfour_serial_lscratch,
+            "fermi": fermi
             },
         "scratch": {
             "psi4": psi4,
             "cfour": cfour_serial,
-            "molpro": molpro_mpi_omp
+            "fermi": fermi
             }
         },
     "mpi": {
