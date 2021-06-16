@@ -357,6 +357,7 @@ class Delta(Procedure):
         for delta_itr, delta_item in enumerate(self.delta_option_list):
             flat_delta_list[delta_itr] = [calc_option for delta_set in delta_item for calc_option
                                           in delta_set]
+            print(flat_delta_list[delta_itr])
         return flat_delta_list
 
     @staticmethod

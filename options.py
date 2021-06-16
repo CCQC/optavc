@@ -1076,7 +1076,9 @@ class Options(object):
             Options.check_delta_format(val, opt_name)
         else:
             try:
-                val = [[val] * len(self.delta_templates)]
+                max_specified = max(len(self.delta_templates), len(self.delta_regexes))
+                val = [[val]] * max_specified
+                print(val)
             except TypeError:
                 return val
         Options.check_option_dtype(val, opt_name, int_allowed)
