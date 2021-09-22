@@ -137,7 +137,7 @@ prefix=/apps/eb/$module/
 module load $module
 
 # Copy job data
-if [[-e input.dat && ! -e ZMAT ]]; then
+if [[ -e input.dat && ! -e ZMAT ]]; then
   cp input.dat $scratch_dir/ZMAT
 else
   cp $SLURM_SUBMIT_DIR/ZMAT $scratch_dir
@@ -154,7 +154,7 @@ if [ -e OPTARC ]; then cp OPTARC $scratch_dir ; fi
 if [ -e ISOTOPES ]; then cp ISOTOPES $scratch_dir ; fi
 if [ -e ISOMASS ]; then cp ISOMASS $scratch_dir ; fi
 if [ -e initden.dat ]; then cp initden.dat $scratch_dir ; fi
-if [ -e OLDMOS ]; then cp OLDMOS $scratch_dir ; fi 
+if [ -e OLDMOS ]; then cp OLDMOS $scratch_dir ; fi
 
 echo " Running cfour on `hostname`"
 echo " Running calculation..."
