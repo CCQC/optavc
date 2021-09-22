@@ -45,12 +45,12 @@ class Calculation(ABC):
     Methods
     -------
     write_input()
-        write ALL input files for the Calculation class. 
+        write ALL input files for the Calculation class.
 
     run()
         run ALL input files contained in the Calculation class. A simple submission of all jobs (at once)
         to the cluster.
-    
+
     get_result()
         get ALL results for the Calculation class.
 
@@ -69,11 +69,11 @@ self.reap    compute_result()
         self.dict_obj = {}
 
     def __str__(self):
-    
+
         return f"{self.class_name()}: {self.options.name}"
-    
+
     def __repr__(self):
-        
+
         return f"{self.class_name()}: {self.options.name}"
 
     def class_name(self):
@@ -103,10 +103,10 @@ self.reap    compute_result()
 
     @abstractmethod
     def run(self):
-        """Standalone method. Implementations for child classes should simply move to the 
+        """Standalone method. Implementations for child classes should simply move to the
         correct directory and execture the submission script. Enables higher level classes
-        to run AnalyticCalculation classes in parallel 
-        
+        to run AnalyticCalculation classes in parallel
+
         :meta private:
 
         Returns
@@ -118,9 +118,9 @@ self.reap    compute_result()
 
     @abstractmethod
     def get_result(self, force_resub=False, skip_wait=False):
-        """getter for the final result of a Calculation. Run or compute_result must already have 
-        been executed 
-        
+        """getter for the final result of a Calculation. Run or compute_result must already have
+        been executed
+
         :meta private:
 
         """
@@ -131,12 +131,12 @@ self.reap    compute_result()
         pass
 
     def compute_result(self):
-        """Wrapper method to run a calculation from scratch. Write inputs. Run calculations. 
-        Collect results for any and all Calculations 
+        """Wrapper method to run a calculation from scratch. Write inputs. Run calculations.
+        Collect results for any and all Calculations
         AnalyticCalc and FindifCalc reimplement this with better ways to wait. The Procedure class
         does simply inherit this.
         :meta private:
-        """ 
+        """
         self.write_input()
         self.run()
         time.sleep(40)
@@ -145,8 +145,8 @@ self.reap    compute_result()
 
 class AnalyticCalc(Calculation):
     """Parent class for the three real types of calculations that can be run. All other child classes will have one or
-    more instances of AnalyticCalc or instances of classes that have instances of AnalyticCalc. 
-    
+    more instances of AnalyticCalc or instances of classes that have instances of AnalyticCalc.
+
     This class contains the necessary code to perform the actual execution of Gradients, Singlepoints, and Hessians.
     For result collection please see AnalyticGradient and Singlepoint child classes
 
@@ -159,13 +159,13 @@ class AnalyticCalc(Calculation):
         system
     self.resub_count : int
         keeps track of whether we have exceed Options.resub_max for each Calculation
-    
+
     Methods
     -------
     run()
         This is the base implementation of run. calls cluster.submit or tries to execute the program
         on the host in a somewhat standard fashion (not guarranteed to work). The working directory
-        must be changed to where the input has been written (the path of the Calculation) and then 
+        must be changed to where the input has been written (the path of the Calculation) and then
         returns to the directory of the Parent Calculation. Returns the job_id (or zero) if no cluster id
         Parent implemenations generally just call this method for each of their Calculation objects.
 
@@ -193,15 +193,15 @@ class AnalyticCalc(Calculation):
             self.cluster = None
         else:
             self.cluster = Cluster(self.options.cluster)
-        
+
         self.resub_count = 0
         self.job_num = None
 
     def run(self):
-        """ Change to singlepoint directory. Effect is to invoke subprocess 
-        
+        """ Change to singlepoint directory. Effect is to invoke subprocess
+
         :meta private:
-        
+
         Returns
         -------
         str : output captured from qsub <name>.sh """
@@ -211,10 +211,10 @@ class AnalyticCalc(Calculation):
 
         if self.options.cluster ==  'HOST':
             pipe = subprocess.PIPE
-            process = subprocess.run([f'{self.options.program}', 
-                                      f'{self.options.input_name}', 
-                                      '-o', 
-                                      f'{self.options.output_name}'], 
+            process = subprocess.run([f'{self.options.program}',
+                                      f'{self.options.input_name}',
+                                      '-o',
+                                      f'{self.options.output_name}'],
                                      stdout=pipe, stderr=pipe, encoding='UTF-8')
             if process.stderr:
                 print(process.stderr)
@@ -231,15 +231,15 @@ class AnalyticCalc(Calculation):
         """ Uses template.InputFile.make_input() to replace the geometry in
         the user provided template file. Writes input file to the calculations
         directory
-        
+
         :meta private:
-        
+
         """
 
         if not os.path.exists(self.path):
             os.makedirs(self.path)
         self.molecule.set_units(self.options.input_units)
-        
+
         if backup:
             backup_template_str = open(self.options.backup_template).read()
             tfp = TemplateFileProcessor(backup_template_str, self.options).input_file_object
@@ -347,7 +347,6 @@ class SinglePoint(AnalyticCalc):
 
     """
 
-    
     def __init__(self, molecule, inp_file_obj, options, path=".", disp_num=1, key=None):
         super().__init__(molecule, inp_file_obj, options, path, key)
         self.disp_num = disp_num
@@ -361,12 +360,12 @@ class SinglePoint(AnalyticCalc):
         """
 
         if not self.check_status(self.options.energy_regex):
-            return None 
+            return None
             # raise RuntimeError(f"Calculation {name} finished but could not get result using"
             #                    f"regex: {self.options.energy_regex}")
 
         output_path = os.path.join(self.path, self.options.output_name)
-        
+
         with open(output_path) as f:
             output = f.read()
 
@@ -380,9 +379,9 @@ class SinglePoint(AnalyticCalc):
     def check_resub(self):
         """ Check/test the resubmission feature. Searches for the 'Giraffe' inserted by
         'insert_Giraffe' function.
-        
+
         :meta private:
-        
+
         Parameters
         ----------
         N/A
@@ -393,11 +392,11 @@ class SinglePoint(AnalyticCalc):
         output_path = os.path.join(self.path, self.options.output_name)
         output_text = open(output_path).read()
         return re.search('Giraffe', output_text)
-    
+
     def insert_Giraffe(self):
         """ Inserts the string 'Giraffe' into all output files. Useful for testing regex
         dependent methods as a proof of concept.
-        
+
         :meta private:
 
         Parameters
@@ -416,7 +415,7 @@ class SinglePoint(AnalyticCalc):
 class AnalyticGradient(AnalyticCalc):
     """ This class was implemented in order to use CFour's analytic gradients with the psi4 CBS
     procedure. CCSD(T) gradients from CFour are not available through the Psi4/CFour interface.
-  
+
     Uses psi4.qcdb to rotate / align the gradient and molecule back into optavc's molecular
     orientation if using cfour gradients.
 
@@ -442,8 +441,8 @@ class AnalyticGradient(AnalyticCalc):
             self.file_not_found_behavior = f"{not_found} for displacement {disp_num}"
         else:
             self.file_not_found_behavior = not_found
-        
-        self.disp_num = disp_num 
+
+        self.disp_num = disp_num
 
     # def reap(self, force_resub):
     #     """ force_resub is only here to match interface for findifcalc resub
@@ -454,14 +453,14 @@ class AnalyticGradient(AnalyticCalc):
 
     def get_result(self, force_resub=False):
         """ Gets the gradient according to method specified by user
-   
+
         :meta private:
 
         Returns
         -------
         np.ndarray
             shape: (natom, 3)
-    
+
         """
 
         if force_resub:
@@ -477,7 +476,12 @@ class AnalyticGradient(AnalyticCalc):
                                f"regex: {self.options.energy_regex}")
 
         if self.options.deriv_file == 'output':
-            return self.grad_from_output()
+            try:
+                return self.grad_from_output()
+            except AttributeError as e:
+                # capture attribute error from accessing NoneType
+                raise RuntimeError("Energy check successful but could not find gradient in output file for calc"
+                                   f"{self.options.name}. Check output file: {self.path}") from e
         else:
             return self.grad_file_lookup()
 
@@ -485,17 +489,17 @@ class AnalyticGradient(AnalyticCalc):
         output_path = os.path.join(self.path, self.options.output_name)
         with open(output_path) as f:
             output = f.read()
-    
+
         # add gradient regex to header regex supplied by user.
         label_xyz = r"(\s*.*(\s*-?\d+\.\d+){3})+"
         regex = self.options.deriv_regex + label_xyz
         grad_str = re.search(regex, output).group()
- 
+
         # cleaned_array = np.where(np.abs(gradient_array) > 1e-14, gradient_array, 0.0)
 
         # aligned_grad = self.rotate_matrix(output, cleaned_array) 
         # return np.where(np.abs(aligned_grad) > 1e-14, aligned_grad, 0.0)
-       
+
         gradient_array = self.str_to_ndarray(grad_str)
         return gradient_array
 
@@ -503,22 +507,22 @@ class AnalyticGradient(AnalyticCalc):
         """ Get reference energy from gradient calculation
 
         :meta private:
-        
+
         Returns
         -------
         float
 
         """
-        
+
         output_path = os.path.join(self.path, self.options.output_name)
-        
+
         with open(output_path) as f:
             output = f.read()
-    
-        return self._get_energy_float(self.options.energy_regex, output) 
+
+        return self._get_energy_float(self.options.energy_regex, output)
 
     def grad_file_lookup(self):
-        
+
         file_path = os.path.join(self.path, self.options.deriv_file)
 
         with open(file_path, 'r') as f:
@@ -528,10 +532,10 @@ class AnalyticGradient(AnalyticCalc):
             import qcelemental as qcel
 
             molecule, cfour_grad = cfour.harvest_GRD(grad_file)
-            cfour_mol, _, _, _, c4_unique = molecule.to_arrays() 
-            
+            cfour_mol, _, _, _, c4_unique = molecule.to_arrays()
+
             psi_mol, _, _, _, psi_unique = self.molecule.cast_to_psi4_molecule_object().to_arrays()
-            
+
             print("rotating molecule and gradient with qcelemental align")
             rmsd, qcel_alignment_mill = qcel.molutil.align.B787(rgeom=psi_mol,
                                                                 cgeom=cfour_mol,
@@ -541,13 +545,13 @@ class AnalyticGradient(AnalyticCalc):
             gradient = qcel_alignment_mill.align_gradient(np.asarray(cfour_grad))
         else:
             gradient = self.str_to_ndarray(grad_file)
-        
+
         return gradient
 
     def str_to_ndarray(self, grad_output):
         """ Take string with possible header from the output file or a specified gradient file
         and convert to psi4 matrix
-        
+
         Notes
         -----
         ignores any header grabs the last three columns of the last 'natom' lines and converts to
@@ -562,7 +566,7 @@ class AnalyticGradient(AnalyticCalc):
 
 class AnalyticHessian(AnalyticCalc):
     """ This class was implemented in order to use CFour's analytic hessians with the psi4 CBS
-    
+
     This class performs the same functionality as AnalyticGradient. See docs.
 
     """
@@ -581,14 +585,14 @@ class AnalyticHessian(AnalyticCalc):
 
     def get_result(self, force_resub=False):
         """ Gets the hessian according to method specified by user
-    
+
         :meta private:
-        
+
         Returns
         -------
         np.ndarray
             shape: (natom, 3)
-    
+
         """
 
         if force_resub:
@@ -601,40 +605,45 @@ class AnalyticHessian(AnalyticCalc):
         if not self.check_status(self.options.energy_regex):
             raise RuntimeError(f"Calculation {self.options.name} finished but could not get result using"
                                f"regex: {self.options.energy_regex}")
- 
+
         if self.options.deriv_file == 'output':
-            hessian_array = self.output_file_lookup()
+            try:
+                hessian_array = self.output_file_lookup()
+            except AttributeError as e:
+                # capture attribute error from calling .group on NoneType returned from re.search
+                raise RuntimeError("Energy check was successful but could not find the Hessian in the otuput file for"
+                                   f"{self.options.name}. Check output file {self.path}") from e
         else:
             hessian_array = self.hessian_file_lookup()
-        
+
         return hessian_array
 
     def hessian_file_lookup(self):
-        """Try to get the hesian from a special written file. Assuming a naive format. 
+        """Try to get the hesian from a special written file. Assuming a naive format.
 
-        Use psi4 qcdb machinery to get a hessian from cfour and ensure proper orientation """    
- 
+        Use psi4 qcdb machinery to get a hessian from cfour and ensure proper orientation """
+
         file_path = os.path.join(self.path, self.options.deriv_file)
-        
+
         with open(file_path) as f:
             hess_string = f.read()
-       
+
         if self.options.program.lower() == 'cfour':
-        
+
             hessian = hessparse.load_hessian(hess_string, dtype="fcmfinal")
             return self.rotate_hessian(hessian)
-        
+
         hess_rows = hess_string.split("\n")[-3*self.molecule.natom:]
         hessian_list = [row.split() for row in hess_rows]
-        
+
         return np.asarray(hess_rows).astype(float)
-    
+
     def output_file_lookup(self):
         output_path = os.path.join(self.path, self.options.output_name)
-        
+
         with open(output_path) as f:
             output = f.read()
-        
+
         # add hessian regex to header regex supplied by user.
         label_xyz = r"(\s*.*(\s*-?\d+\.\d+){3})+"
         regex = self.options.result_regex + label_xyz
@@ -644,7 +653,7 @@ class AnalyticHessian(AnalyticCalc):
 
     def rotate_hessian(self, hessian):
         """only needed for cfour. Same procedure as in psi4. Use grad file to rotate the internal molecular orientaiton
-        back to the psi4 (user) orientation. Then rotate the hessian """ 
+        back to the psi4 (user) orientation. Then rotate the hessian """
 
         import qcelemental as qcel
 
@@ -655,16 +664,16 @@ class AnalyticHessian(AnalyticCalc):
 
         molecule, cfour_grad = cfour.harvest_GRD(grad_file)
         cfour_mol, _, _, _, c4_unique = molecule.to_arrays()
-        
+
         psi_mol, _, _, _, psi_unique = self.molecule.cast_to_psi4_molecule_object().to_arrays()
-        
+
         print("rotating molecule and gradient with qcelemental align")
         rmsd, qcel_alignment_mill = qcel.molutil.align.B787(rgeom=psi_mol,
                                                             cgeom=cfour_mol,
                                                             runiq=psi_unique,
                                                             cuniq=c4_unique,
                                                             verbose=0)
-        return qcel_alignment_mill.align_hessian(hessian) 
+        return qcel_alignment_mill.align_hessian(hessian)
 
     def get_reference_energy(self):
         """ Get reference energy from gradient calculation
@@ -674,18 +683,18 @@ class AnalyticHessian(AnalyticCalc):
         float
 
         """
-        
+
         output_path = os.path.join(self.path, self.options.output_name)
-        
+
         with open(output_path) as f:
             output = f.read()
-    
-        return self._get_energy_float(self.options.energy_regex, output) 
+
+        return self._get_energy_float(self.options.energy_regex, output)
 
     def str_to_ndarray(self, grad_output):
         """ Take string with possible header from the output file or a specified gradient file
         and convert to psi4 matrix
-        
+
         Notes
         -----
         ignores any header grabs the last three columns of the last 'natom' lines and converts to

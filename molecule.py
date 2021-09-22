@@ -54,7 +54,8 @@ class Molecule(object):
         return self.natom
 
     def __iter__(self):
-        for label, xyz in zip(self.labels, self.geom):
+        geom = self.geom.reshape(-1, 3)
+        for label, xyz in zip(self.labels, geom):
             yield label, xyz
 
     def __str__(self):

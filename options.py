@@ -12,7 +12,7 @@ class Options(object):
     not required for all jobs or have default values.
 
     The required options for the extrapolation procedure are xtpl_templates, xtpl_regexes, and xtpl_basis_sets.
-    energy_regex and template_file_path are NOT allowed to fill in xtpl_regexes and xtpl_templates. 
+    energy_regex and template_file_path are NOT allowed to fill in xtpl_regexes and xtpl_templates.
     program is allowed fill in xtpl_programs.
 
     The required options for performing an additive correction are delta_templates and delta_regexes.
@@ -23,39 +23,39 @@ class Options(object):
     -----
     This class is also responsible for setting options in Psi4 that are required for optavc to utilize Psi4
     properly. Common keywords are max_force_g_convergence, findif_points, hessian_write, cart_hess_read. etc
-    
+
     These are keywords related to the finite difference procedure and geometry optimization. NOT keywords related to
     running a specific calculation: basis_set, e_convergence, etc.
 
     Attributes
     ----------
-    
+
     template_file_path : string
         default : 'template.dat'
-        
+
         string, interpretable as a path, to a template file
-   
+
     backup_template : string or None
         default : None
 
         string, interpretable as a path to a secondary template file if the first has failed.
-        This is only invoked when performing a restart. This is invoked either with 
+        This is only invoked when performing a restart. This is invoked either with
         *run_optavc("HESS", sow=False)* or *run_optavc("OPT", restart_iteration=<xx>)*
         For optimizations this only applies to the iteration we restart. It will not persist, so
-        the template_file_path should also be updated to match backup_template. (Only backup_template will 
+        the template_file_path should also be updated to match backup_template. (Only backup_template will
         overwrite the currently written template files).
 
     energy_regex : string
         python 'raw' string. Should work with multiline mode. Should contain a group which returns
         the energy itself.
-    
+
     self.correction_regexes : string
         default = ''
-    
+
         python 'raw' string. Should work with multiline mode. Should contain a group which returns the energy.
         This is a simple additive correction to the energy. For instance (T) correlation energy if CCSD(T) is needed.
         Not usually needed.
-    
+
     self.deriv_regex : string
         default = ''
 
@@ -68,77 +68,77 @@ class Options(object):
         default = setter
         Allowed names for the cluster are vulcan, sapelo, and sapelo_old which are SGE, SLURM, and PBS/TORQUE clusters.
         if not provided otpavc will use socket.gethostname() to determine what cluster the user is on.
-    
+
     self.nslots : int
         default 4
-    
+
         How many threads or tasks the job should be run with. Used to create the cluster submission script
-    
+
     self.threads : int
         default 1
-    
+
         WARNING. Experimental. For programs that CLAIM to use mixed MPI and OpenMP parallelism set threads seperately
         from taks
-    
+
     self.scratch : string
         default 'lscratch'
-    
-        Choose between running on local scratch or a network filesystem. Vulcan has only lscratch. Sapelo has both; 
+
+        Choose between running on local scratch or a network filesystem. Vulcan has only lscratch. Sapelo has both;
         however, lscratch space is limited.
-    
+
     self.program : string
         default ""
-    
+
         name of the program to calculations with orca, molpro, psi4, or cfour
-        The name should at least be sufficiently long to load the module with. i.e. cfour@2.0+mpi is sufficient for 
+        The name should at least be sufficiently long to load the module with. i.e. cfour@2.0+mpi is sufficient for
         vulcan load psi4 is also sufficient isntead of psi4@master.
-    
+
     self.parallel : string
         default = setter
-        
+
         For programs like cfour the submission script generated and module loaded by optavc depends on the version.
         Recognized values are mpi, serial, and mixed. serial encompases openMP parallelism. Mixed uses both and is
         experimental.
 
         the setter will attempt first to determine the value for parallel from the name of the program. i.e. cfour2.0+mpi
         otherwise programs defaults are: mpi for orca and molpro. serial for psi4 and cfour.
-    
+
     self.time_limit : string
         default 10:00:00
-    
+
         time limit on vulcan is automatically 2 weeks and this overrides optavc's default.
     self.queue : string
         default gen4.q or batch
-    
+
     self.email : bool or None
         Vulcan and Sapelo both use myid. If requred email is automatically determined by $USER
         EMAIL is only setup for the Sapelo cluster
-    
+
     self.email_opts : string
         default = 'END,FAIL'
-        
+
         See documentation for the clusters queueing system for valid values. Optavc will not check.
         The default is only value for SLURM
-    
+
     self.memory : string
         default '32GB'
-        
+
         How much total memory is needed for the Job. Include units. Only used for SAPELO
-    
+
     self.name : string
         default STEP
-        
+
         This name may be altered at various levels but is the main prefix for how optavc names jobs.
         This impacts both directories in the current working directory and job names on the cluster.
 
     self.files_to_copy : list[string]
         default []
-        
+
         Copy files from the current working directory to the directories for each displacement.
         Useful for files like GENBAS which can be pulled by default from the cfour install but may need
         to be overridden
 
-    self.input_name 
+    self.input_name
         default 'input.dat'
 
         what should the template file be named when it is written into a directory.
@@ -146,7 +146,7 @@ class Options(object):
 
     self.output_name : string
         default 'output.dat'
-        
+
     self.input_units : string
         default "angstrom"
 
@@ -159,7 +159,7 @@ class Options(object):
 
     self.dertype : string
         default ENERGY
-    
+
         allowed values are ENERGY or 0, GRADIENT or 1, HESSIAN or 2. Optimizations can be done with 0, or 1.
         Hessians can be done with 0, 1, or 2
 
@@ -172,15 +172,15 @@ class Options(object):
 
     self.mpi : bool
         default None
-        
+
         WARNING Experimental. Legacy, unmaintained code for submitting singlepoints to slurm as a single mpi process
-    
+
     self.job_array : bool
         defualt False
 
         Should calculations be submitted in an array or as individual jobs to the cluster. array submission is only
         supported if cluster is Vulcan. job_array will be set to False for Sapelo.
-    
+
     self.resub : bool
         default False
 
@@ -189,10 +189,10 @@ class Options(object):
 
     self.resub_max : int
         default None
-    
+
         How many times should a singlepoint be resubmitted. Some old molpro issues on specific Sapelo nodes required
         ths to be set to a relatively large integer. Be careful
-        
+
     self.sleepy_sleep_time : int
         default 60
 
@@ -213,9 +213,9 @@ class Options(object):
         This is a required keyword for performing an extrapolation. Optavc will fail is this is set unnecesarily
         without the other required keywords.
 
-        list of lists of cardinal numbers for a basis set extrapolation. See composite gradient section for more 
+        list of lists of cardinal numbers for a basis set extrapolation. See composite gradient section for more
         details
-        
+
         The first list corresponds to extrapolation of a correlated method, the second list is for HF.
         example [[4, 3], [5, 4, 3]]
 
@@ -240,7 +240,7 @@ class Options(object):
 
         If no value is given. self.program will be applied to every calculation in the extrapolation procedure
         The first list corresponds to extrapolation of a correlated method, the second list is for HF.
-   
+
     self.xtpl_names : None or List[List[str]]
         default setter
 
@@ -260,7 +260,7 @@ class Options(object):
 
     self.xtpl_nslots : None or List[List[int]]
         default [[self.nslots, self.nslots], [self.nslots, self.nslots]]
-        
+
         see self.nslots for its default value
 
     self.xtpl_memories : None or List[List[str]]
@@ -270,7 +270,7 @@ class Options(object):
 
     self.xtpl_parallels : None or List[List[str]]
         default [[self.parallel, self.parallel], [self.parallel, self.parallel]]
-        
+
         see self.parallel for defaults
 
     self.xtpl_time_limits : None or List[List[str]]
@@ -284,12 +284,12 @@ class Options(object):
         self.scratch for default
 
     self.xtpl_deriv_regexes : None or List[List[str]]
-        default [[self.deriv_regex, self.deriv_regex], [self.deriv_regex, self.deriv_regex]] 
+        default [[self.deriv_regex, self.deriv_regex], [self.deriv_regex, self.deriv_regex]]
 
         see.deriv_regex for default
 
     self.xtpl_deriv_files : None or List[List[str]]
-        default [[self.deriv_file, self.deriv_file], [self.deriv_file, self.deriv_file]] 
+        default [[self.deriv_file, self.deriv_file], [self.deriv_file, self.deriv_file]]
 
     self.scf_xtpl : bool
         default False
@@ -336,7 +336,7 @@ class Options(object):
         self.mpi = kwargs.pop("mpi", None)
         self.job_array = kwargs.pop("job_array", False)
         self.resub = kwargs.pop("resub", False)
-        self.resub_max = kwargs.pop("resub_max", None)
+        self.resub_max = kwargs.pop("resub_max", 1)
         self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
@@ -434,7 +434,7 @@ class Options(object):
 
     @cluster.setter
     def cluster(self, val):
-        
+
         if val is None:
             hostname = socket.gethostname()
             if 'ss-sub' in hostname:
@@ -476,7 +476,7 @@ class Options(object):
             self._input_name = 'ZMAT'
         else:
             self._input_name = val
-    
+
     @property
     def output_name(self):
         return self._output_name
@@ -490,7 +490,7 @@ class Options(object):
                 val = 'output.dat'
 
         self._output_name = val
-            
+
 
     @property
     def wait_time(self):
@@ -506,7 +506,7 @@ class Options(object):
     @property
     def email(self):
         return self._email
-    
+
     @email.setter
     def email(self, val):
         if not val:
@@ -627,14 +627,14 @@ class Options(object):
 
     @xtpl_names.setter
     def xtpl_names(self, val):
-        
+
         if self.xtpl_templates is None:
             self._xtpl_names = None
 
         elif not val:
             tmp = [['large_c', 'intermed_c', 'small_c'],
                    ['large_ref', 'intermed_ref', 'small_ref']]
-            
+
             if len(self.xtpl_basis_sets[0]) == 2:
                 tmp[0].pop(1)
             else:
@@ -649,7 +649,7 @@ class Options(object):
 
             # unique names should only appear for unique templates
             names = [[''] * len(self.xtpl_templates[0]), [''] * len(self.xtpl_templates[1])]
-            
+
             templates_seen = []
             for xtpl_set_itr, xtpl_set in enumerate(self.xtpl_templates):
                 for template_itr, template_val in enumerate(xtpl_set):
@@ -751,7 +751,7 @@ class Options(object):
     @property
     def xtpl_deriv_files(self):
         return self._xtpl_deriv_files
-    
+
     @xtpl_deriv_files.setter
     def xtpl_deriv_files(self, val):
         val = Options.xtpl_setter_helper(val, self.deriv_file, "xtpl_setter_helper")
@@ -824,12 +824,12 @@ class Options(object):
 
     @delta_names.setter
     def delta_names(self, val):
-        
+
         if self.delta_templates is None:
             pass
         elif not val:
             tmp = [[f'delta_{itr}', f'ref_{itr}'] for itr in range(len(self.delta_templates))]
-            
+
             val = copy.deepcopy(self.delta_templates)
             for sublist in val:
                 for itr, item in enumerate(sublist):
@@ -927,15 +927,15 @@ class Options(object):
         else:
             self.xtpl = True
 
-        xtpl_additions = [self.xtpl_scratches, 
-                          self.xtpl_parallels, 
+        xtpl_additions = [self.xtpl_scratches,
+                          self.xtpl_parallels,
                           self.xtpl_names,
-                          self.xtpl_dertypes, 
-                          self.xtpl_memories, 
+                          self.xtpl_dertypes,
+                          self.xtpl_memories,
                           self.xtpl_programs,
-                          self.xtpl_nslots, 
-                          self.xtpl_queues, 
-                          self.xtpl_time_limits, 
+                          self.xtpl_nslots,
+                          self.xtpl_queues,
+                          self.xtpl_time_limits,
                           self.xtpl_deriv_regexes,
                           self.xtpl_deriv_files]
 
@@ -978,14 +978,14 @@ class Options(object):
 
         delta_options = [self.delta_templates,
                          self.delta_programs,
-                         self.delta_queues, 
+                         self.delta_queues,
                          self.delta_nslots,
-                         self.delta_memories, 
-                         self.delta_dertypes, 
+                         self.delta_memories,
+                         self.delta_dertypes,
                          self.delta_scratches,
-                         self.delta_parallels, 
-                         self.delta_time_limits, 
-                         self.delta_names, 
+                         self.delta_parallels,
+                         self.delta_time_limits,
+                         self.delta_names,
                          self.delta_deriv_regexes,
                          self.delta_deriv_files]
 
@@ -1037,7 +1037,7 @@ class Options(object):
 
         if val is None:
             val = default
-        
+
         if isinstance(val, list):
             Options.check_xtpl_format(val, opt_name)
         else:
