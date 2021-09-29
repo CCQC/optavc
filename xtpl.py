@@ -48,8 +48,8 @@ class Procedure(Calculation):
             options.energy_regex = calc_options[0]
             options.template_file_path = calc_options[1]
             options.dertype = calc_options[2]
-            options.program = calc_options[3]
             options.parallel = calc_options[4]
+            options.program = calc_options[3]
             options.queue = calc_options[5]
             options.name = calc_options[6]
             options.scratch = calc_options[7]
@@ -59,21 +59,13 @@ class Procedure(Calculation):
             options.deriv_regex = calc_options[11]
             options.deriv_file = calc_options[12]
 
-            print(options.deriv_file)
-            print(calc_options[12])
-            
-            print(options.deriv_regex)
-            print(options.dertype)
-
             if self.job_type == 'GRADIENT':
                 calc_path = f"{self.path}/STEP{self.iteration:>02d}/{options.name}"
             else:
                 calc_path = f"{self.path}/{options.name}"
 
             options.name = f"{options.name}--{self.iteration:>02d}"
-
             input_file = self.proc_inputs[calc_itr]
-            print(calc_path)
 
             if self.job_type == 'HESSIAN':
                 if options.dertype == 'HESSIAN':
@@ -357,7 +349,6 @@ class Delta(Procedure):
         for delta_itr, delta_item in enumerate(self.delta_option_list):
             flat_delta_list[delta_itr] = [calc_option for delta_set in delta_item for calc_option
                                           in delta_set]
-            print(flat_delta_list[delta_itr])
         return flat_delta_list
 
     @staticmethod
@@ -442,10 +433,12 @@ def xtpl_delta_wrapper(job_type, molecule, options, path='./HESS', iteration=0):
     elif options.xtpl:
         return True, Xtpl(job_type, molecule, options, path, iteration)
     elif options.delta:
-        raise NotImplementedError("Can't just perform a correction."
-                                  "You probably want to perform an XtplDelta calculation if you're "
-                                  "looking to use the Delta functionality.")
+        # TODO The delta procedure would need to be 'tacked onto'
+        # a 'standard' i.e. (non-procedure) gradient or hessian calculation
+        raise NotImplementedError("Can't just perform a correction. You probably want to perform" 
+                                  "an XtplDelta calculation if you're looking to use the Delta functionality.")
         return True, Delta(job_type, molecule, options, path, iteration)
     else:
+        # No need to create a procedure perform a standard calculation
         return False, None
 

@@ -1,11 +1,8 @@
 import pytest
 import random
+import copy
 
-from optavc.tests.utils import options_4_cluster, create_needed_objects
-from optavc.findifcalcs import Gradient, Hessian
-from optavc.xtpl import xtpl_wrapper
-
-options1, options2 = options_4_cluster("calc_3")
+import optavc
 
 # lists defined up here to avoid weird formatting
 hess = [1, 3, 4, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 135, 136, 137, 138, 243, 456, 654, 769, 
@@ -16,77 +13,106 @@ grad = [[1, 3, 4, 10, 11, 12, 13, 34, 42, 61], [3, 4, 5], [57], []]
 grad_xtpl = [[[1, 10, 15, 26, 27], [53, 54, 56, 59]], [[], []], [[], [3, 4, 5, 8, 9, 10]],
              [[val for val in range(50, 61)], []]]
 
+##
+# Hessian findif resub test options
+#
 
-@pytest.mark.parametrize("options, failures, paths", [(options1, hess, ['hess']), 
-                                                      (options2, hess_xtpl, ['xtpl_hess/high_corr', 
-                                                                             'xtpl_hess/low_corr'])])
+ccsd = r"\s+UCCSD\scorrelation\senergy\s+\s*(-\d*.\d*)"
+mp2 = r"\s+RHF-RMP2\scorrelation\senergy\s+=\s+(-\d*.\d*)"
+hf = r"\s+Reference\senergy\s+(-\d*.\d*)"
+
+input0 = 'templates/calc_3_template.dat'
+input1 = 'templates/calc_3_template1.dat'
+input2 = 'templates/calc_3_template2.dat'
+
+options1  = {'template_file_path': input0,
+            'program': 'psi4',
+            'energy_regex': r"\s*!RHF-UCCSD\(T\)\senergy\s+(-\d+\.\d+)",
+            'resub': True}
+
+options2 = copy.deepcopy(options1)
+options2.update({'xtpl_templates': [[input1, input2], [input1, input2]],
+                 'xtpl_regexes': [[ccsd, hf], [ccsd, hf]],
+                 'xtpl_basis_sets': [[4, 3], [4, 3]],
+                 'xtpl_names': [['high_corr', 'low_corr'], ['high_corr', 'low_corr']]})  
+
+# names are old didnt want to change
+
+##
+# Gradient findif resub test options
+#
+
+mp2qz = r"\s*MP2\/QZ\scorrelation\senergy\s*(-\d*.\d*)"
+mp2tz = r"\s*MP2\/TZ\scorrelation\senergy\s*(-\d*.\d*)"
+scfqz = r"\s*SCF\/QZ\s+reference\senergy\s*(-\d*.\d*)"
+ccsdt = r"\s*\!CCSD\(T\)\s*total\s*energy\s*(-\d*.\d*)"
+mp2 = r"\s*MP2\stotal\senergy:\s+(-\d+.\d+)"
+ 
+options3  = {'template_file_path': input0,
+            'program': 'molpro',
+            'energy_regex': r"\s*!CCSD\(T\)\s*total\s*energy\s*(-\d*.\d*)",    
+            'resub': True}
+
+options4 = copy.deepcopy(options3)
+options4.update({'xtpl_templates': [[input2, input2], [input2, input2]],
+                 'xtpl_regexes': [[mp2qz, mp2tz], [scfqz]],
+                 'xtpl_basis_sets': [[4, 3], [4, 3]],
+                 'xtpl_names': [['low_corr', 'low_corr'], ['low_corr', 'low_corr']],
+                 'delta_names': [['high_corr', 'high_corr']],
+                 'delta_templates': [[input1, input1]],
+                 'delta_regexes': [[ccsdt, mp2]]})  
+
+@pytest.mark.parametrize("options, failures, path", [(options1, hess, 'hess'), 
+                                                      (options2, hess_xtpl, 'xtpl_hess')])
 @pytest.mark.no_calc
-def test_hessian_failures(options, failures, paths):
-    # the actual molecule doesn't really matter as long as it has the right number
-    # of displacements
+def test_hessian_failures(options, failures, path):
+    """ the actual molecule doesn't really matter as long as it has the right number
+    of displacements. Pretend that template1 and template2 are different (they're the same)
+    our test hessian is actually the same calc twice. We pretend here that the ccsd and hf are pulled out of the same
+    # output file for the qz and tz calculations """
 
-    # our test hessian is actually the same calc twice 
-    options.update({'xtpl_energy': [r"\s+UCCSD\scorrelation\senergy\s+\s*(-\d*.\d*)",
-                                    r"\s+UCCSD\scorrelation\senergy\s+\s*(-\d*.\d*)",
-                                    r"\s+UCCSD\scorrelation\senergy\s+\s*(-\d*.\d*)",
-                                    r"\s+RHF-RMP2\scorrelation\senergy\s+=\s+(-\d*.\d*)",
-                                    r"\s+Reference\senergy\s+(-\d*.\d*)"],
-                    'energy_regex': r"\s+UCCSD\scorrelation\senergy\s+\s*(-\d*.\d*)"})
+    options_obj, input_obj, molecule = optavc.initialize_optavc(options) 
+    calc_obj, calc_type = optavc.create_calc_objects('HESS', molecule, options_obj, input_obj, path)
 
-    molecule, input_obj, options_obj = create_needed_objects(options)
-    
-    for index, path in enumerate(paths):
-
-        if isinstance(failures[index], list):
-            true_failures = failures[index]
-        else:
-            true_failures = failures
-
-        print(path)
-        calc_obj = Hessian(molecule, input_obj, options_obj, path=path)
-        calc_size = len(calc_obj.calculations)
-
-        for i in range(20):
-            assert_failures_match(calc_obj, true_failures)
-            random_insertions = [random.randint(1, calc_size) for itr in range(30)]
-            calc_obj.failed = calc_obj.failed + random_insertions
-            calc_obj.collect_failures()
-            assert_failures_match(calc_obj, true_failures)
-
-
-@pytest.mark.parametrize("options, failures", [(options1, grad), (options2, grad_xtpl)])
-@pytest.mark.no_calc
-def test_gradient_failures(options, failures):
-   
-    options.update({'xtpl_energy': [r"\s*CCSD\s*correlation\s*energy\s+(-?\d+\.\d+)",
-                                    r"\s*MP2\/QZ\scorrelation\senergy\s*(-\d*.\d*)",
-                                    r"\s*MP2\/TZ\scorrelation\senergy\s*(-\d*.\d*)",
-                                    r"\s*MP2\scorrelation\senergy:\s+(-\d*.\d*)",
-                                    r"\s*SCF\/QZ\s+reference\senergy\s*(-\d*.\d*)"],
-                    'xtpl_corrections': r"\s*Triples\s*\(T\)\s*contribution\s+(-\d*.\d*)",
-                    'energy_regex': r"\s*\!CCSD\(T\)\s*total\s*energy\s*(-\d*.\d*)"})    
+    if calc_obj.options.xtpl:
         
-    molecule, input_obj, options_obj = create_needed_objects(options)
+        for i in range(2):
+            true_failures = failures[i]
+            hess_obj = calc_obj.calc_objects[i] 
+
+    else:
+        true_failures = failures
+        hess_obj = calc_obj
+    
+    iterative_collect_failures(hess_obj, true_failures, 10)
+
+@pytest.mark.parametrize("options, failures, path", [(options3, grad, "grad"), (options4, grad_xtpl, "xtpl_grad")])
+@pytest.mark.no_calc
+def test_gradient_failures(options, failures, path):
+    """Either output file or the regex lines are removed from the failures. Each list of failures is a STEP """  
+
+    options_obj, input_obj, molecule = optavc.initialize_optavc(options)
 
     for step in range(4):
 
+        calc_obj, calc_type = optavc.create_calc_objects("OPT", molecule, options_obj, input_obj, path=f'{path}')
+        grad_obj = calc_obj.create_opt_gradient(iteration=step)
+
         if options_obj.xtpl:
-            calc_objects = xtpl_wrapper("GRADIENT", molecule, input_obj, options_obj,
-                                        path=f"xtpl_grad", iteration=step)
-
-            for corr_idx, calc_obj in enumerate(calc_objects):
-                # xtpl_wrapper returns CCSD/DZ, MP2DZ, MP2/QZ, MP2/TZ, SCF/QZ gradients
-
-                true_failures = failures[step][0]
-                if corr_idx > 1:
+                
+            for index, xtpl_obj in enumerate(grad_obj.calc_objects):
+                print(index, xtpl_obj.options.name)
+                print(xtpl_obj.path)
+                if index < 4:
                     true_failures = failures[step][1]
-
-                iterative_collect_failures(calc_obj, true_failures, 10)
+                else:
+                    true_failures = failures[step][0]
+                
+                iterative_collect_failures(xtpl_obj, true_failures, 10)
 
         else:
             true_failures = failures[step]
-            calc_obj = Gradient(molecule, input_obj, options_obj, path=f"grad/STEP{step:02d}")
-            iterative_collect_failures(calc_obj, true_failures, 10)
+            iterative_collect_failures(grad_obj, true_failures, 10)
 
 
 def iterative_collect_failures(calc_obj, true_failures, num):
@@ -112,5 +138,5 @@ def assert_failures_match(calc_obj, true_failures):
         assert val in true_failures
     
     for val in true_failures:
-        assert val in optavc_f_0_idx 
+        assert val in optavc_f_0_idx
 

@@ -14,11 +14,11 @@ class Optimization():
     """ Run AnalyticGradient and Gradient calculations or any procedures which contain and only contain
     those object types """
 
-    def __init__(self, molecule, input_obj, options, xtpl_inputs=None):
+    def __init__(self, molecule, input_obj, options, xtpl_inputs=None, path='.'):
         
         self.molecule = molecule
         self.options = options
-        self.path = os.path.abspath(".")
+        self.path = os.path.abspath(path)
         self.inp_file_obj = input_obj
         self.step_molecules = []
         self.xtpl_inputs = xtpl_inputs
@@ -146,7 +146,7 @@ class Optimization():
 
         options = copy.deepcopy(self.options)
         options.name = f"{self.options.name}--{iteration:02d}"
-        step_path = f"STEP{iteration:>02d}"
+        step_path = f"{self.path}/STEP{iteration:>02d}"
 
         use_procedure, grad_obj = xtpl_delta_wrapper("GRADIENT", self.molecule, self.options,
                                                      self.path, iteration)

@@ -314,7 +314,7 @@ class Options(object):
         self.cluster = kwargs.pop("cluster", None)
         self.nslots = kwargs.pop("nslots", 4)
         self.threads = kwargs.pop("threads", 1)  # for mixed mpi(nslots)/omp(threads)
-        self.scratch = kwargs.pop('scratch', 'lscratch')
+        self.scratch = kwargs.pop('scratch', 'SCRATCH')
         self.parallel = kwargs.pop("parallel", "")  # default in setter
         self.program = kwargs.pop("program", "")  # no default
         self.time_limit = kwargs.pop("time_limit", "10:00:00")
@@ -410,7 +410,7 @@ class Options(object):
 
         if prog[0] in ['psi4', 'fermi']:
             self.parallel = 'serial'
-        elif prog[0] == 'orca':
+        elif prog[0] in ['orca', 'molpro']:
             self.parallel = 'mpi'
 
         if not self.parallel:
@@ -420,13 +420,10 @@ class Options(object):
                 self.parallel = 'serial'
             elif '~mpi' in prog[-1]:
                 self.parallel = 'serial'
-            elif prog[0] == 'molpro':
-                if self.threads > 1:
-                    self.parallel = 'mixed'
-                else:
-                    self.parallel = 'mpi'
-            elif prog[0] == 'cfour':
+            elif 'cfour' in prog[0]:
                 self.parallel = 'serial' # should be safe default
+            else:
+                self.parallel = 'serial'
 
     @property
     def cluster(self):
@@ -529,9 +526,6 @@ class Options(object):
                     val = "FCMFINAL"
                 else:
                     val = "GRD"
-        print("ready to assign deriv_file")
-        print(self.program)
-        print(val)
         self._deriv_file = val
 
     @property
@@ -672,7 +666,6 @@ class Options(object):
             val = names
         else:
             val = Options.xtpl_setter_helper(val, "xtpl_names")
-        print(val)
         self._xtpl_names = val
 
     @property
@@ -690,7 +683,6 @@ class Options(object):
 
     @xtpl_dertypes.setter
     def xtpl_dertypes(self, val):
-        print(f"self.dertypes is: {self.dertype}")
         val = Options.xtpl_setter_helper(val, self.dertype, "xtpl_dertypes")
         self._xtpl_dertypes = val
 
@@ -718,7 +710,8 @@ class Options(object):
 
     @xtpl_parallels.setter
     def xtpl_parallels(self, val):
-        val = Options.xtpl_setter_helper(val, self.parallel, "xtpl_parallels")
+        # ignore default. Want user set value or program based default
+        val = Options.xtpl_setter_helper(val, None, "xtpl_parallels")
         self._xtpl_parallel = val
 
     @property
@@ -785,10 +778,7 @@ class Options(object):
 
     @delta_programs.setter
     def delta_programs(self, val):
-        if not val and not self.program:
-            raise ValueError("No program provided for delta_programs or program. Cannot proceed")
-        else:
-            val = self.delta_setter_helper(val, self.program, "delta_programs")
+        val = self.delta_setter_helper(val, self.program, "delta_programs")
         self._delta_programs = val
 
     @property
@@ -836,7 +826,6 @@ class Options(object):
                     sublist[itr] = ''
 
             templates_seen = []
-            print(self.delta_templates)
             for delta_itr, delta_set in enumerate(self.delta_templates):
                 for template_itr, template in enumerate(delta_set):
                     if template not in templates_seen:
@@ -853,7 +842,7 @@ class Options(object):
                                 break
         else:
             val = self.delta_setter_helper(val, "delta_names")
-        print(val)
+
         self._delta_names = val
 
     @property
@@ -881,7 +870,8 @@ class Options(object):
 
     @delta_parallels.setter
     def delta_parallels(self, val):
-        val = self.delta_setter_helper(val, self.parallel, "delta_parallels")
+        # ignore default. Want user set value or program based default
+        val = self.delta_setter_helper(val, None, "delta_parallels")
         self._delta_parallel = val
 
     @property
@@ -968,8 +958,12 @@ class Options(object):
         elif self.delta_regexes is None and self.delta_templates:
             raise ValueError("Did not provide delta_templates")
         elif self.delta_templates is None and self.delta_regexes is None:
+            self.delta = False
             return
         else:
+            if None in self.delta_programs and not self.program:
+                raise ValueError("Delta options have been set; however, no default delta_program or program has been" 
+                                 "set")
             self.delta = True
 
         for itr, template_set in enumerate(self.delta_templates):
@@ -1078,7 +1072,6 @@ class Options(object):
             try:
                 max_specified = max(len(self.delta_templates), len(self.delta_regexes))
                 val = [[val]] * max_specified
-                print(val)
             except TypeError:
                 return val
         Options.check_option_dtype(val, opt_name, int_allowed)
