@@ -24,7 +24,7 @@ def test_delta_options():
     """
 
     delta_opts = {'program'            : "psi4", 
-                  'delta_templates'    : [['template.dat','template.dat'],['template.dat','template.dat']],
+                  'delta_templates'    : [['template1.dat','template2.dat'],['template.dat','template.dat']],
                   'delta_regexes'      : [[energy_regex, energy_regex],[molpronfc, molprofc]],
                   'delta_nslots'       : [[10,2],[4,4]],
                   'delta_programs'     : [['psi4@master','psi4@master'],["molpro", "molpro"]],
@@ -38,4 +38,4 @@ def test_delta_options():
     template_obj = template.TemplateFileProcessor(template_dummy_string, opts_obj)
     molecule = template_obj.molecule
 
-    xtpl.Delta("GRADIENT", molecule, opts_obj)
+    delta_obj = xtpl.Delta("GRADIENT", molecule, opts_obj)

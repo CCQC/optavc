@@ -20,6 +20,7 @@ from . import xtpl
 from .template import TemplateFileProcessor
 from .calculations import AnalyticHessian
 
+
 def run_optavc(jobtype, 
                options_dict, 
                restart_iteration=0, 
@@ -60,18 +61,8 @@ def run_optavc(jobtype,
         final molecule.
     """
 
-    options_obj = Options(**options_dict)
-
-    if options_obj.xtpl:
-        options_obj.template_file_path = options_obj._xtpl_templates[0][0]
-
-    template_file_string = open(options_obj.template_file_path).read()
-    tfp = TemplateFileProcessor(template_file_string, options_obj)
+    initialize_optavc(options_dict, molecule)
     xtpl_inputs = None
-
-    input_obj = tfp.input_file_object
-    if not molecule:
-        molecule = tfp.molecule
 
     if test_input:
         try:
@@ -82,49 +73,81 @@ def run_optavc(jobtype,
             print(str(e))
             raise
 
-    if jobtype.upper() in ['OPT', "OPTIMIZATION"]:
-        opt_obj = optimize.Optimization(molecule, input_obj, options_obj)
+    calc_obj, calc_type = create_calc_objects(jobtype, molecule, options_obj, input_obj, path)
+
+    if calc_type == 'OPT':
         result, energy, molecule = opt_obj.run(restart_iteration, xtpl_restart)
         return result, energy, molecule
 
-    elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
-
-        if path == '.':
-            path = './HESS'
-
-        use_procedure, hess_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj, path)
-        if not use_procedure:
-            
-            print(options_obj.dertype)
-
-            if options_obj.dertype == 'HESSIAN':
-                hess_obj = AnalyticHessian(molecule, input_obj, options_obj, path)
-            else:
-                hess_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
-
+    elif calc_type == 'HESS':
+        
         if sow:
-            hess_obj.compute_result()
+            calc_obj.compute_result()
         else:
-            hess_obj.get_result(force_resub=True)
-
-        psi4.core.print_out("\n\n\n============================================================\n")
-        psi4.core.print_out("========================= OPTAVC ===========================\n")
-        psi4.core.print_out("============================================================\n")
-
-        psi4.core.print_out("\nThe final computed hessian is:\n\n")        
-        psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
-        wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'def2-tzvp')
-        wfn.set_hessian(psi4.core.Matrix.from_array(hess_obj.result))
-        wfn.set_energy(hess_obj.energy)
-        psi4.core.set_variable("CURRENT ENERGY", hess_obj.energy)
-        psi4.driver.vibanal_wfn(wfn)
-        psi4.driver._hessian_write(wfn) 
-
+            calc_obj.get_result(force_resub=True)
+        
+        final_hess_prinout(calc_obj)
         return hess_obj.result, hess_obj.energy, hess_obj.molecule
+
+
+def initialize_optavc(options_dict, molecule=None):
+    """Create the three basic objects required for running optavc. Options, InputFile, Molecule """
+
+    options_obj = Options(**options_dict)
+
+    if options_obj.xtpl:
+        options_obj.template_file_path = options_obj._xtpl_templates[0][0]
+
+    template_file_string = open(options_obj.template_file_path).read()
+    tfp = TemplateFileProcessor(template_file_string, options_obj)
+
+    input_obj = tfp.input_file_object
+    if not molecule:
+        molecule = tfp.molecule 
+
+    return options_obj, input_obj, molecule
+
+
+def create_calc_objects(jobtype, molecule, options_obj, input_obj, path='.'):
+    """Creates the internal classes optavc uses to keep track of displacements and calculations. Unfifies possible jobtype"""  
+ 
+    if jobtype.upper() in ['OPT', "OPTIMIZATION"]:
+        calc_obj = optimize.Optimization(molecule, input_obj, options_obj)
+        calc_type = 'OPT'
+
+    elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
+        calc_type = 'HESS'        
+
+        use_procedure, calc_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj, path)
+        if not use_procedure:
+     
+            if options_obj.dertype == 'HESSIAN':
+                calc_obj = AnalyticHessian(molecule, input_obj, options_obj, path)
+            else:
+                calc_obj = findifcalcs.Hessian(molecule, input_obj, options_obj, path)
     else:
         raise ValueError(
             """Can only run hessians or optimizations. For gradients see findifcalcs.py to run or
             add wrapper here""")
+     
+    return calc_obj, calc_type
+
+
+def final_hess_printout(hess_obj):
+    """ Here because we don't want printouts for each hessian in the XtpleDelta procedure """
+
+    psi4.core.print_out("\n\n\n============================================================\n")
+    psi4.core.print_out("========================= OPTAVC ===========================\n")
+    psi4.core.print_out("============================================================\n")
+    
+    psi4.core.print_out("\nThe final computed hessian is:\n\n")        
+    psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
+    wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'def2-tzvp')
+    wfn.set_hessian(psi4.core.Matrix.from_array(hess_obj.result))
+    wfn.set_energy(hess_obj.energy)
+    psi4.core.set_variable("CURRENT ENERGY", hess_obj.energy)
+    psi4.driver.vibanal_wfn(wfn)
+    psi4.driver._hessian_write(wfn)    
 
 
 def test_singlepoints(jobtype, molecule, options_obj, input_obj, xtpl_inputs=None, path=""):

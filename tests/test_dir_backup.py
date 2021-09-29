@@ -11,6 +11,7 @@ from optavc.tests import utils
                                                                  (True, False, True),
                                                                  (True, False, False),
                                                                  (False, False, False)])
+@pytest.skip
 @pytest.mark.no_calc
 def test_dir_backup(xtpl, xtpl_restart, low_corr_exists, restart_at, iterations_started):
 

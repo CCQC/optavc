@@ -48,8 +48,8 @@ class Procedure(Calculation):
             options.energy_regex = calc_options[0]
             options.template_file_path = calc_options[1]
             options.dertype = calc_options[2]
-            options.program = calc_options[3]
             options.parallel = calc_options[4]
+            options.program = calc_options[3]
             options.queue = calc_options[5]
             options.name = calc_options[6]
             options.scratch = calc_options[7]
@@ -442,10 +442,12 @@ def xtpl_delta_wrapper(job_type, molecule, options, path='./HESS', iteration=0):
     elif options.xtpl:
         return True, Xtpl(job_type, molecule, options, path, iteration)
     elif options.delta:
-        raise NotImplementedError("Can't just perform a correction."
-                                  "You probably want to perform an XtplDelta calculation if you're "
-                                  "looking to use the Delta functionality.")
+        # TODO The delta procedure would need to be 'tacked onto'
+        # a 'standard' i.e. (non-procedure) gradient or hessian calculation
+        raise NotImplementedError("Can't just perform a correction. You probably want to perform" 
+                                  "an XtplDelta calculation if you're looking to use the Delta functionality.")
         return True, Delta(job_type, molecule, options, path, iteration)
     else:
+        # No need to create a procedure perform a standard calculation
         return False, None
 

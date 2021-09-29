@@ -47,6 +47,7 @@ options1, options2 = utils.options_4_cluster("calc_1")
 """ Tests """
 
 
+@pytest.mark.skip
 @pytest.mark.parametrize("options", [options1, options2])
 def test_opt(options):
     """ Run a normal optimization for O2. Once the optimization is done delete some singlepoints
@@ -66,6 +67,7 @@ def test_opt(options):
         options.update({'xtpl': xtpl})
 
 
+@pytest.mark.skip
 @pytest.mark.parametrize("options", [options1, options2])
 def test_hessian(options):
     """ Run a Hessian. Stop. Try to re-reap that Hessian stop. Delete some singlepoints and
@@ -113,6 +115,7 @@ program_options = [({"program": 'psi4', "energy_regex": psi4_regex, "itr": 1}, '
                      "energy_regex": molpro_regex,
                      "itr": 2}, 'mixed')]
 
+@pytest.mark.skip
 @pytest.mark.parametrize("options, expected", program_options) 
 @pytest.mark.parametrize("cluster", ['sge', 'slurm'])
 @pytest.mark.parametrize("scratch", ['scratch', 'lscratch'])
