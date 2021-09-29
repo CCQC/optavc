@@ -59,21 +59,13 @@ class Procedure(Calculation):
             options.deriv_regex = calc_options[11]
             options.deriv_file = calc_options[12]
 
-            print(options.deriv_file)
-            print(calc_options[12])
-            
-            print(options.deriv_regex)
-            print(options.dertype)
-
             if self.job_type == 'GRADIENT':
                 calc_path = f"{self.path}/STEP{self.iteration:>02d}/{options.name}"
             else:
                 calc_path = f"{self.path}/{options.name}"
 
             options.name = f"{options.name}--{self.iteration:>02d}"
-
             input_file = self.proc_inputs[calc_itr]
-            print(calc_path)
 
             if self.job_type == 'HESSIAN':
                 if options.dertype == 'HESSIAN':
@@ -357,7 +349,6 @@ class Delta(Procedure):
         for delta_itr, delta_item in enumerate(self.delta_option_list):
             flat_delta_list[delta_itr] = [calc_option for delta_set in delta_item for calc_option
                                           in delta_set]
-            print(flat_delta_list[delta_itr])
         return flat_delta_list
 
     @staticmethod

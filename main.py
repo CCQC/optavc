@@ -61,7 +61,7 @@ def run_optavc(jobtype,
         final molecule.
     """
 
-    initialize_optavc(options_dict, molecule)
+    options_obj, input_obj, molecule = initialize_optavc(options_dict, molecule)
     xtpl_inputs = None
 
     if test_input:
@@ -76,7 +76,7 @@ def run_optavc(jobtype,
     calc_obj, calc_type = create_calc_objects(jobtype, molecule, options_obj, input_obj, path)
 
     if calc_type == 'OPT':
-        result, energy, molecule = opt_obj.run(restart_iteration, xtpl_restart)
+        result, energy, molecule = calc_obj.run(restart_iteration, xtpl_restart)
         return result, energy, molecule
 
     elif calc_type == 'HESS':
@@ -112,7 +112,7 @@ def create_calc_objects(jobtype, molecule, options_obj, input_obj, path='.'):
     """Creates the internal classes optavc uses to keep track of displacements and calculations. Unfifies possible jobtype"""  
  
     if jobtype.upper() in ['OPT', "OPTIMIZATION"]:
-        calc_obj = optimize.Optimization(molecule, input_obj, options_obj)
+        calc_obj = optimize.Optimization(molecule, input_obj, options_obj, path=path)
         calc_type = 'OPT'
 
     elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:

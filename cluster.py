@@ -234,8 +234,6 @@ class Cluster:
                 # simple check for substring in output
                 if not ("PENDING" in output or "RUNNING" in output):
                     job_state = True
-        print(f"state: {job_state}")
-        print(f"output: {output}")
         return job_state
 
     def get_template(self, job_array=False, email=None, parallel='serial'):
@@ -309,8 +307,6 @@ class Cluster:
         else:
             in_out = {'input_name': options.input_name, 'output_name': options.output_name}
 
-        print(f"input and output values {in_out}")
-
         if self.cluster_name in ['SAPELO', "SAPELO_OLD"]:
 
             scratch = options.scratch.lower()
@@ -339,15 +335,13 @@ class Cluster:
                 odict.update({'prog': prog})
 
         elif self.cluster_name == 'VULCAN':
-            
+
             prog = vulcan_programs.progdict.get(options.parallel).get(scratch).get(progname)
             prog = prog.format(**in_out)
             odict.update({'prog': prog})
 
             if options.job_array:
                 odict.update({'tc': str(job_num)})
-
-        print(f"formatting template with the follwing options: {odict}")
 
         return template.format(**odict)
 

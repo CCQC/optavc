@@ -23,8 +23,12 @@ def test_delta_options():
     H	0.8793880	-1.2973360	-0.9027060
     """
 
+    input1 = 'templates/template1.dat'
+    input2 = 'templates/template2.dat'
+    input3 = 'templates/template.dat'
+
     delta_opts = {'program'            : "psi4", 
-                  'delta_templates'    : [['template1.dat','template2.dat'],['template.dat','template.dat']],
+                  'delta_templates'    : [[input1, input2],[input3, input3]],
                   'delta_regexes'      : [[energy_regex, energy_regex],[molpronfc, molprofc]],
                   'delta_nslots'       : [[10,2],[4,4]],
                   'delta_programs'     : [['psi4@master','psi4@master'],["molpro", "molpro"]],

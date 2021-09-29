@@ -526,9 +526,6 @@ class Options(object):
                     val = "FCMFINAL"
                 else:
                     val = "GRD"
-        print("ready to assign deriv_file")
-        print(self.program)
-        print(val)
         self._deriv_file = val
 
     @property
@@ -669,7 +666,6 @@ class Options(object):
             val = names
         else:
             val = Options.xtpl_setter_helper(val, "xtpl_names")
-        print(val)
         self._xtpl_names = val
 
     @property
@@ -687,7 +683,6 @@ class Options(object):
 
     @xtpl_dertypes.setter
     def xtpl_dertypes(self, val):
-        print(f"self.dertypes is: {self.dertype}")
         val = Options.xtpl_setter_helper(val, self.dertype, "xtpl_dertypes")
         self._xtpl_dertypes = val
 
@@ -831,7 +826,6 @@ class Options(object):
                     sublist[itr] = ''
 
             templates_seen = []
-            print(self.delta_templates)
             for delta_itr, delta_set in enumerate(self.delta_templates):
                 for template_itr, template in enumerate(delta_set):
                     if template not in templates_seen:
@@ -848,7 +842,7 @@ class Options(object):
                                 break
         else:
             val = self.delta_setter_helper(val, "delta_names")
-        print(val)
+
         self._delta_names = val
 
     @property
@@ -1078,7 +1072,6 @@ class Options(object):
             try:
                 max_specified = max(len(self.delta_templates), len(self.delta_regexes))
                 val = [[val]] * max_specified
-                print(val)
             except TypeError:
                 return val
         Options.check_option_dtype(val, opt_name, int_allowed)
