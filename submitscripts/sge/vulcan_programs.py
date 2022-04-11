@@ -15,6 +15,9 @@ molpro -n $NSLOTS --nouse-logfile --no-xml-output -o {output_name} {input_name}"
 molpro_mixed = """vulcan load molpro@2010.1.67+mpi
 molpro -n $NSLOTS -t $THREADS --nouse-logfile --no-xml-output -o {output_name} {input_name}"""
 
+molpro_serial = """vulcan load molpro@2010.1.67~mpi
+molpro -n $NSLOTS --nouse-logfile --no-xml-output -o {output_name} {input_name}"""
+
 psi4 = """vulcan load psi4@master
 psi4 -n $NSLOTS
 """
@@ -119,7 +122,8 @@ progdict = {
         "scratch": {
             "psi4": psi4,
             "cfour": cfour_serial,
-            "fermi": fermi
+            "fermi": fermi,
+            "molpro": molpro_serial
         }
     },
     "mpi": {

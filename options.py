@@ -97,7 +97,7 @@ class Options(object):
         default = setter
 
         For programs like cfour the submission script generated and module loaded by optavc depends on the version.
-        Recognized values are mpi, serial, and mixed. serial encompases openMP parallelism. Mixed uses both and is
+        Recognized values are mpi, serial, and mixed. serial encompasses openMP parallelism. Mixed uses both and is
         experimental.
 
         the setter will attempt first to determine the value for parallel from the name of the program. i.e. cfour2.0+mpi
@@ -410,7 +410,7 @@ class Options(object):
 
         if prog[0] in ['psi4', 'fermi']:
             self.parallel = 'serial'
-        elif prog[0] in ['orca', 'molpro']:
+        elif prog[0] in ['orca']:
             self.parallel = 'mpi'
 
         if not self.parallel:
