@@ -116,7 +116,8 @@ def create_calc_objects(jobtype, molecule, options_obj, input_obj, path='.'):
         calc_type = 'OPT'
 
     elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
-        calc_type = 'HESS'        
+        calc_type = 'HESS'
+        path = './HESS'    
 
         use_procedure, calc_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj, path)
         if not use_procedure:
