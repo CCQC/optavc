@@ -402,7 +402,7 @@ class Options(object):
 
     @program.setter
     def program(self, val=""):
-        prog = val.split("@")
+        prog = val.lower().split("@")
         self._program = prog[0]
 
         if prog[0] == 'fermi':
