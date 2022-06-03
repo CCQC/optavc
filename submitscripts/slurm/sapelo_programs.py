@@ -37,12 +37,12 @@ molpro_mpi = """module load intel/2019b
 export PATH=$PATH:/work/jttlab/molpro/2010/bin/
 
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
-mkdir -p $scrath_dir
+mkdir -p $scratch_dir
 
 time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
 
 tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
-rm $scratch_dir
+rm $scratch_dir -r
 
 """
 

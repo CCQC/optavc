@@ -87,7 +87,7 @@ def run_optavc(jobtype,
             calc_obj.get_result(force_resub=True)
         
         final_hess_printout(calc_obj)
-        return hess_obj.result, hess_obj.energy, hess_obj.molecule
+        return calc_obj.result, calc_obj.energy, calc_obj.molecule
 
 
 def initialize_optavc(options_dict, molecule=None):

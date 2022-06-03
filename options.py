@@ -410,7 +410,7 @@ class Options(object):
 
         if prog[0] in ['psi4', 'fermi']:
             self.parallel = 'serial'
-        elif prog[0] in ['orca']:
+        elif prog[0] in ['orca', 'molpro']:
             self.parallel = 'mpi'
 
         if not self.parallel:
