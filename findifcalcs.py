@@ -394,7 +394,7 @@ class Gradient(FiniteDifferenceCalc):
 
         constructor = SinglePoint
         
-        if '1.4' in psi_version:
+        if float(psi_version[:3]) >= 1.4:
             create = psi4.driver_findif.gradient_from_energies_geometries
             compute = psi4.driver_findif.assemble_gradient_from_energies
         else:
@@ -458,7 +458,7 @@ class Hessian(FiniteDifferenceCalc):
 
         # need to prevent the interpreter from seeing methods for the alternate
         # version
-        if '1.4' in psi_version:
+        if float(psi_version[:3]) >= 1.4:
             if self.options.dertype == 'ENERGY':
                 create = psi4.driver_findif.hessian_from_energies_geometries 
                 compute = psi4.driver_findif.assemble_hessian_from_energies

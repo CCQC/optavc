@@ -149,7 +149,7 @@ def final_hess_printout(hess_obj):
     wfn.set_energy(hess_obj.energy)
     psi4.core.set_variable("CURRENT ENERGY", hess_obj.energy)
     psi4.driver.vibanal_wfn(wfn)
-    psi4.driver._hessian_write(wfn)    
+    psi4.driver.driver_findif.hessian_write(wfn)    
 
 
 def test_singlepoints(jobtype, molecule, options_obj, input_obj, xtpl_inputs=None, path=""):
