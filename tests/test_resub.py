@@ -26,8 +26,8 @@ input1 = 'templates/calc_3_template1.dat'
 input2 = 'templates/calc_3_template2.dat'
 
 options1  = {'template_file_path': input0,
-            'program': 'psi4',
-            'energy_regex': r"\s*!RHF-UCCSD\(T\)\senergy\s+(-\d+\.\d+)",
+            'program': 'molpro',
+            'energy_regex': r"\s*!RHF-UCCSD\(T\)\s*energy\s+(-\d+\.\d+)",
             'resub': True}
 
 options2 = copy.deepcopy(options1)
@@ -72,7 +72,7 @@ def test_hessian_failures(options, failures, path):
     # output file for the qz and tz calculations """
 
     options_obj, input_obj, molecule = optavc.initialize_optavc(options) 
-    calc_obj, calc_type = optavc.create_calc_objects('HESS', molecule, options_obj, input_obj, path)
+    calc_obj, calc_type = optavc.create_calc_objects('HESS', molecule, options_obj, input_obj, path=f'{path}')
 
     if calc_obj.options.xtpl:
         

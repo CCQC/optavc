@@ -20,7 +20,6 @@ def test_psi4_driver():
     """ Runs mp2/CBS for O2 and compare against psi4 """   
 
     options = {"energy_regex": PSI_SCF,
-               "queue": "gen3.q",
                "xtpl_templates": [["templates/psi_O2_mp2qz.dat", "templates/psi_O2_mp2tz.dat"],
                                   ["templates/psi_O2_mp2qz.dat", "templates/psi_O2_mp2tz.dat"]], 
                "xtpl_names": [["mp2_qz", "mp2_tz"], ["mp2_qz", "mp2_tz"]],
@@ -30,8 +29,10 @@ def test_psi4_driver():
                "max_force_g_convergence": 1e-6
     }
 
-    if socket.gethostname():
-        options.update({"xtpl_queues": "gen3.q"}) 
+    if socket.gethostname() == 'vlogin2.ccqc.uga.edu':
+        options.update({"xtpl_queues": "gen4.q"}) 
+    if socket.gethostname() == 'ss-sub2.gacrc.uga.edu':
+        options.update({"xtpl_queues": "batch"}) 
     
     gradient, energy, molecule = optavc.run_optavc('opt', options)   
 
@@ -54,8 +55,10 @@ def test_xtpl_molpro():
                "max_force_g_convergence": 1e-7
     }
     
-    if socket.gethostname():
-        options.update({"delta_queues": "gen4.q", "xtpl_queues": "gen3.q"}) 
+    if socket.gethostname() == 'vlogin2.ccqc.uga.edu':
+        options.update({"delta_queues": "gen4.q", "xtpl_queues": "gen4.q"}) 
+    if socket.gethostname() == 'ss-sub2.gacrc.uga.edu':
+        options.update({"delta_queues": "batch", "xtpl_queues": "batch"}) 
 
     gradient, energy, molecule = optavc.run_optavc('opt', options) 
 
@@ -72,7 +75,6 @@ def test_xtpl_cfour():
                                   ["templates/psi_O2_scfqz_grad.dat", "templates/psi_O2_scftz_grad.dat"]],
                "xtpl_regexes": [[PSI_MP2], [PSI_MP2]],
                "xtpl_dertypes": "gradient",
-               "xtpl_queues": "gen3.q",
                "xtpl_programs": "psi4",
                "xtpl_names": [["mp2_qz", "mp2_tz"], ["scf_qz", "scf_tz"]],
                "xtpl_deriv_regexes": PSI4_GRAD,
@@ -80,14 +82,15 @@ def test_xtpl_cfour():
                "delta_templates": [["templates/cfour_O2_ccsdt.dat", "templates/cfour_O2_mp2.dat"]],
                "delta_regexes": [[C4_ENERGY, C4_ENERGY]],
                "delta_dertypes": "gradient",
-               "delta_queues": "gen4.q",
                "delta_programs": [["cfour@2+mpi", "cfour@2~mpi"]],
                "delta_names": [["c4_grad1", "c4_grad2"]],
                "max_force_g_convergence": 1e-6
     }
 
-    if socket.gethostname():
-        options.update({"delta_queues": "gen4.q", "xtpl_queues": "gen3.q"})
+    if socket.gethostname() == 'vlogin2.ccqc.uga.edu':
+        options.update({"delta_queues": "gen4.q", "xtpl_queues": "gen4.q"}) 
+    if socket.gethostname() == 'ss-sub2.gacrc.uga.edu':
+        options.update({"delta_queues": "batch", "xtpl_queues": "batch"}) 
 
     gradient, energy, molecule = optavc.run_optavc("opt", options)
 

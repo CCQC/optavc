@@ -6,7 +6,7 @@ import optavc
 @pytest.mark.no_calc
 def test_standard_grad():
 
-    options = {'template_file_path': f"calc_1_template.dat",
+    options = {'template_file_path': f"templates/calc_1_template.dat",
         'program': 'psi4',
         'energy_regex': r"\s*\*\s*CCSD\(T\)\stotal\senergy\s+=\s*(-\d*.\d*)",
         'name': 'test',
@@ -28,23 +28,31 @@ def test_standard_grad():
 
 @pytest.mark.no_calc
 @pytest.mark.parametrize("option1,option2,option3,option4,expected", 
-    [([['calc_1_template2.dat', 'calc_1_template2.dat'], ['calc_1_template2.dat', 'calc_1_template2.dat']],
-      [['calc_1_template1.dat', 'calc_1_template1.dat']], None, None, 
+    [([['templates/calc_1_template2.dat', 'templates/calc_1_template2.dat'], 
+       ['templates/calc_1_template2.dat', 'templates/calc_1_template2.dat']],
+      [['templates/calc_1_template1.dat', 'templates/calc_1_template1.dat']], None, None, 
       ['large_c'] * 4 + ['delta_0'] * 2),
-     ([['calc_1_template1.dat', 'calc_1_template2.dat'], ['calc_1_template1.dat', 'calc_1_template2.dat']],
-      [['calc_2_template1.dat', 'calc_2_template1.dat']], None, None, 
+     ([['templates/calc_1_template1.dat', 'templates/calc_1_template2.dat'], 
+       ['templates/calc_1_template1.dat', 'templates/calc_1_template2.dat']],
+      [['templates/calc_2_template1.dat', 'templates/calc_2_template1.dat']], None, None, 
       ['large_c', 'small_c', 'large_c', 'small_c'] + ['delta_0'] * 2),
-     ([['calc_1_template1.dat', 'calc_1_template2.dat'], ['calc_2_template1.dat', 'calc_2_template2.dat']],
-      [['calc_3_template.dat', 'calc_3_template.dat']], None, None, 
+     ([['templates/calc_1_template1.dat', 'templates/calc_1_template2.dat'],
+       ['templates/calc_2_template1.dat', 'templates/calc_2_template2.dat']],
+      [['templates/calc_3_template.dat', 'templates/calc_3_template.dat']], None, None, 
       ['large_c', 'small_c', 'large_ref', 'small_ref'] + ['delta_0'] * 2),
-     ([['calc_1_template2.dat', 'calc_1_template2.dat'], ['calc_1_template2.dat', 'calc_1_template2.dat']],
-      [['calc_1_template1.dat', 'calc_1_template1.dat']], [['xtpl_calc', 'xtpl_calc'], ['xtpl_calc', 'xtpl_calc']],
+     ([['templates/calc_1_template2.dat', 'templates/calc_1_template2.dat'],
+       ['templates/calc_1_template2.dat', 'templates/calc_1_template2.dat']],
+      [['templates/calc_1_template1.dat', 'templates/calc_1_template1.dat']],
+      [['xtpl_calc', 'xtpl_calc'], ['xtpl_calc', 'xtpl_calc']],
       [['ccsdt', 'ccsdt']], ['xtpl_calc'] * 4 + ['ccsdt'] * 2),
-     ([['calc_1_template1.dat', 'calc_1_template2.dat'], ['calc_1_template1.dat', 'calc_1_template2.dat']],
-      [['calc_2_template1.dat', 'calc_2_template1.dat']], [['qz', 'tz'], ['qz', 'tz']], 
+     ([['templates/calc_1_template1.dat', 'templates/calc_1_template2.dat'],
+       ['templates/calc_1_template1.dat', 'templates/calc_1_template2.dat']],
+      [['templates/calc_2_template1.dat', 'templates/calc_2_template1.dat']], [['qz', 'tz'], ['qz', 'tz']], 
       [['ccsdt', 'ccsdt']], ['qz', 'tz', 'qz', 'tz', 'ccsdt', 'ccsdt']),
-     ([['calc_1_template1.dat', 'calc_1_template2.dat'], ['calc_2_template1.dat', 'calc_2_template2.dat']],
-      [['calc_3_template.dat', 'calc_3_template1.dat']], [['mp2qz', 'mp2tz'], ['scfqz', 'scftz']], [['ccsdt', 'mp2']], 
+     ([['templates/calc_1_template1.dat', 'templates/calc_1_template2.dat'],
+       ['templates/calc_2_template1.dat', 'templates/calc_2_template2.dat']],
+      [['templates/calc_3_template.dat', 'templates/calc_3_template1.dat']],
+      [['mp2qz', 'mp2tz'], ['scfqz', 'scftz']], [['ccsdt', 'mp2']], 
       ['mp2qz', 'mp2tz', 'scfqz', 'scftz', 'ccsdt', 'mp2'])])
 def test_xtpl_grad(option1, option2, option3, option4, expected):
 
@@ -57,7 +65,7 @@ def test_xtpl_grad(option1, option2, option3, option4, expected):
     scf_qz = r"\s*SCF\/QZ\s+reference\senergy\s*(-\d*.\d*)"
     scf_tz = r"\s*SCF\/TZ\s+reference\senergy\s*(-\d*.\d*)"
 
-    options = {'template_file_path': f"calc_1_template.dat",
+    options = {'template_file_path': f"templates/calc_1_template.dat",
         'program': 'psi4',
         'energy_regex': r"\s*\*\s*CCSD\(T\)\stotal\senergy\s+=\s*(-\d*.\d*)",
         'xtpl_templates': option1,
@@ -93,13 +101,13 @@ def test_complex_molecule():
     """This is to make sure that atom labels are properly read especially for assigning mixed basis sets """
 
     basic_options = {
-        'template_file_path': "mixed_basis.dat",
+        'template_file_path': "templates/mixed_basis.dat",
         'input_name': "input.dat",
         'output_name': "output.dat",
         'program': 'psi4',
         'energy_regex': r"\s*\*\s*CCSD\(T\)\stotal\senergy\s+=\s*(-\d*.\d*)",
         'maxiter': 100,
-        'cluster': 'Vulcan',
+        #'cluster': 'Vulcan',
         'name': 'test',
         'nslots': 4,
         'print': 3,
