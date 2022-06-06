@@ -87,7 +87,7 @@ def run_optavc(jobtype,
             calc_obj.get_result(force_resub=True)
         
         final_hess_printout(calc_obj)
-        return hess_obj.result, hess_obj.energy, hess_obj.molecule
+        return calc_obj.result, calc_obj.energy, calc_obj.molecule
 
 
 def initialize_optavc(options_dict, molecule=None):
@@ -116,7 +116,9 @@ def create_calc_objects(jobtype, molecule, options_obj, input_obj, path='.'):
         calc_type = 'OPT'
 
     elif jobtype.upper() in ["HESS", "FREQUENCY", "FREQUENCIES", "HESSIAN"]:
-        calc_type = 'HESS'        
+        calc_type = 'HESS'
+        if path == '.':
+            path = './HESS'
 
         use_procedure, calc_obj = xtpl.xtpl_delta_wrapper("HESSIAN", molecule, options_obj, path)
         if not use_procedure:

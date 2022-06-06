@@ -337,7 +337,6 @@ class Options(object):
         self.job_array = kwargs.pop("job_array", False)
         self.resub = kwargs.pop("resub", False)
         self.resub_max = kwargs.pop("resub_max", 1)
-        self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
         self.maxiter = kwargs.pop("maxiter", 20)
@@ -402,16 +401,17 @@ class Options(object):
 
     @program.setter
     def program(self, val=""):
-        prog = val.split("@")
+        prog = val.lower().split("@")
         self._program = prog[0]
 
         if prog[0] == 'fermi':
             raise NotImplementedError("Fermi submit scripts have not been finalized.")
 
-        if prog[0] in ['psi4', 'fermi']:
-            self.parallel = 'serial'
-        elif prog[0] in ['orca']:
-            self.parallel = 'mpi'
+        if self.parallel == "":
+            if prog[0] in ['psi4', 'fermi']:
+                self.parallel = 'serial'
+            elif prog[0] in ['orca', 'molpro']:
+                self.parallel = 'mpi'
 
         if not self.parallel:
             if '+mpi' in prog[-1]:
