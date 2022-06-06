@@ -337,7 +337,6 @@ class Options(object):
         self.job_array = kwargs.pop("job_array", False)
         self.resub = kwargs.pop("resub", False)
         self.resub_max = kwargs.pop("resub_max", 1)
-        self.resub_test = kwargs.pop("resub_test", False)
         self.wait_time = kwargs.pop("wait_time", None)
         self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
         self.maxiter = kwargs.pop("maxiter", 20)

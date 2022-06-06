@@ -375,43 +375,6 @@ class SinglePoint(AnalyticCalc):
         # If no correction, adding zero. Add to correlation energy if 2 energies
         return energy + correction
 
-    # These two functions are purely here for the testing of the resub functionality
-    def check_resub(self):
-        """ Check/test the resubmission feature. Searches for the 'Giraffe' inserted by
-        'insert_Giraffe' function.
-
-        :meta private:
-
-        Parameters
-        ----------
-        N/A
-        Returns
-        -------
-        bool
-        """
-        output_path = os.path.join(self.path, self.options.output_name)
-        output_text = open(output_path).read()
-        return re.search('Giraffe', output_text)
-
-    def insert_Giraffe(self):
-        """ Inserts the string 'Giraffe' into all output files. Useful for testing regex
-        dependent methods as a proof of concept.
-
-        :meta private:
-
-        Parameters
-        ----------
-        N/A
-        Returns
-        -------
-        N/A, all it does is insert 'Giraffe' into the output text. Trust me, it's useful.
-        """
-        output_path = os.path.join(self.path, self.options.output_name)
-        output_text = open(output_path).read()
-        output_text += 'Giraffe'
-        with open(output_path, 'w') as file:
-            file.writelines(output_text)
-
 class AnalyticGradient(AnalyticCalc):
     """ This class was implemented in order to use CFour's analytic gradients with the psi4 CBS
     procedure. CCSD(T) gradients from CFour are not available through the Psi4/CFour interface.

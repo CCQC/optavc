@@ -263,12 +263,6 @@ class FiniteDifferenceCalc(Calculation):
         self.failed = []
 
         for index, calc in enumerate(self.calculations):
-            # This if statement is only here for testing purposes and should only apply to
-            # singlepoints
-            if self.options.resub_test:
-                calc.insert_Giraffe()
-                if calc.check_resub():
-                    self.failed.append(calc)
             # This if statement will be used for an optimization
             try:
                 success = calc.check_status(calc.options.energy_regex, return_text=False)
