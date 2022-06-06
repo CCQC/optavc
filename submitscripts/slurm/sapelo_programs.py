@@ -8,8 +8,7 @@ julia {input_name}
 
 """
 
-psi4 = """module load PSI4/1.3.2_conda
- 
+psi4 = """
 export PSI_SCRATCH=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $PSI_SCRATCH
 psi4 -n $NSLOTS
@@ -20,8 +19,7 @@ rm $PSI_SCRATCH -r
 # run from lscratch
 # tar and copy back
 
-psi4_lscratch = """module load PSI4/1.3.2_conda
-
+psi4_lscratch = """
 export PSI_SCRATCH=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $PSI_SCRATCH
 
