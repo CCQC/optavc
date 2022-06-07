@@ -139,7 +139,6 @@ class Cluster:
             raise RuntimeError(f"Error encountered trying to run {' '.join(self.queue_info)}")
 
         output = process.stdout
-        print(output)
         job_state = self.job_finished(output)
         
         if not job_array:

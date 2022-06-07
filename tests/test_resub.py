@@ -42,15 +42,15 @@ options2.update({'xtpl_templates': [[input1, input2], [input1, input2]],
 # Gradient findif resub test options
 #
 
-mp2qz = r"\s*MP2\/QZ\scorrelation\senergy\s*(-\d*.\d*)"
-mp2tz = r"\s*MP2\/TZ\scorrelation\senergy\s*(-\d*.\d*)"
-scfqz = r"\s*SCF\/QZ\s+reference\senergy\s*(-\d*.\d*)"
-ccsdt = r"\s*\!CCSD\(T\)\s*total\s*energy\s*(-\d*.\d*)"
-mp2 = r"\s*MP2\stotal\senergy:\s+(-\d+.\d+)"
+mp2qz = r"^\s*MP2\/QZ\scorrelation\senergy\s*(-\d*.\d*)"
+mp2tz = r"^\s*MP2\/TZ\scorrelation\senergy\s*(-\d*.\d*)"
+scfqz = r"^\s*SCF\/QZ\s+reference\senergy\s*(-\d*.\d*)"
+ccsdt = r"^\s*\!CCSD\(T\)\s*total\s*energy\s*(-\d*.\d*)"
+mp2 = r"^\s*MP2\stotal\senergy:\s+(-\d+.\d+)"
  
 options3  = {'template_file_path': input0,
             'program': 'molpro',
-            'energy_regex': r"\s*!CCSD\(T\)\s*total\s*energy\s*(-\d*.\d*)",    
+            'energy_regex': r"^\s*!CCSD\(T\)\s*total\s*energy\s*(-\d*.\d*)",    
             'resub': True}
 
 options4 = copy.deepcopy(options3)
