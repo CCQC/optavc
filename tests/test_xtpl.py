@@ -14,7 +14,7 @@ PSI_MP2 = r"\s+\sTotal\sEnergy\s+=\s+(-\d+.\d+)"
 PSI_MP2_GRAD_EN = r"\s*DF-MP2\sTotal\sEnergy\s\(a\.u\.\)\s*:\s*(-\d*.\d*)" 
 PSI_SCF_GRAD_EN = r"\s*\s\sTotal\sEnergy\s*=\s*(-\d*.\d*)"
 C4_ENERGY = r"\s*The\sfinal\selectronic\senergy\sis\s*(-\d*.\d*)"
-PSI4_GRAD = r"\s*-Total\s*Gradient:\n\s*Atom[XYZ\s]*[-\s]*"
+PSI4_GRAD = r"\s*-Total\s*[Gg]radient:\n\s*Atom[XYZ\s]*[-\s]*"
 
 def test_psi4_driver():
     """ Runs mp2/CBS for O2 and compare against psi4 """   
@@ -29,9 +29,9 @@ def test_psi4_driver():
                "max_force_g_convergence": 1e-6
     }
 
-    if socket.gethostname() == 'vlogin2.ccqc.uga.edu':
+    if 'vlogin' in socket.gethostname():
         options.update({"xtpl_queues": "gen4.q"}) 
-    if socket.gethostname() == 'ss-sub2.gacrc.uga.edu':
+    if 'ss-sub' in socket.gethostname():
         options.update({"xtpl_queues": "batch"}) 
     
     gradient, energy, molecule = optavc.run_optavc('opt', options)   
@@ -55,9 +55,9 @@ def test_xtpl_molpro():
                "max_force_g_convergence": 1e-7
     }
     
-    if socket.gethostname() == 'vlogin2.ccqc.uga.edu':
+    if 'vlogin' in socket.gethostname():
         options.update({"delta_queues": "gen4.q", "xtpl_queues": "gen4.q"}) 
-    if socket.gethostname() == 'ss-sub2.gacrc.uga.edu':
+    if 'ss-sub' in socket.gethostname():
         options.update({"delta_queues": "batch", "xtpl_queues": "batch"}) 
 
     gradient, energy, molecule = optavc.run_optavc('opt', options) 
@@ -87,12 +87,12 @@ def test_xtpl_cfour():
                "max_force_g_convergence": 1e-6
     }
 
-    if socket.gethostname() == 'vlogin2.ccqc.uga.edu':
+    if 'vlogin' in socket.gethostname():
         options.update({"delta_queues": "gen4.q", "xtpl_queues": "gen4.q"}) 
-    if socket.gethostname() == 'ss-sub2.gacrc.uga.edu':
+    if 'ss-sub' in socket.gethostname():
         options.update({"delta_queues": "batch", "xtpl_queues": "batch"}) 
 
     gradient, energy, molecule = optavc.run_optavc("opt", options)
 
-    assert math.isclose(energy, -149.700965645798)
+    assert math.isclose(energy, -149.700965645798, rel_tol=1.e-05)
  

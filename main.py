@@ -137,6 +137,7 @@ def create_calc_objects(jobtype, molecule, options_obj, input_obj, path='.'):
 
 def final_hess_printout(hess_obj):
     """ Here because we don't want printouts for each hessian in the XtpleDelta procedure """
+    psi_version = float(psi4.__version__[:3])
 
     psi4.core.print_out("\n\n\n============================================================\n")
     psi4.core.print_out("========================= OPTAVC ===========================\n")
@@ -149,7 +150,10 @@ def final_hess_printout(hess_obj):
     wfn.set_energy(hess_obj.energy)
     psi4.core.set_variable("CURRENT ENERGY", hess_obj.energy)
     psi4.driver.vibanal_wfn(wfn)
-    psi4.driver._hessian_write(wfn)    
+    if psi_version <= 1.4:
+        psi4.driver._hessian_write(wfn)
+    else:
+        psi4.driver.driver_findif.hessian_write(wfn)    
 
 
 def test_singlepoints(jobtype, molecule, options_obj, input_obj, xtpl_inputs=None, path=""):

@@ -202,25 +202,33 @@ class Xtpl(Procedure):
 
     def get_reference_energy(self):
         return self.energy
-    
+
     def get_result(self, force_resub=False):
-        
+        psi_version = float(psi4.__version__[:3])
+
+        if psi_version >= 1.6:
+            cbs_xtpl = psi4.driver_cbs_helper
+        else:
+            cbs_xtpl = psi4.driver.driver_cbs
+            
 
         # CLARIFICATION. optavc reads in extrapolation input in the order large to small
         # this is a hold over from a previous version where that actually made sense
         # psi4 specifies basis sets in the order small to large. Indices may be flipped
         # from what you would expect therefore
 
-        results = list(map(psi4.core.Matrix.from_array, super().get_result(force_resub)))
+        if psi_version >= 1.6:
+            results = np.array(super().get_result(force_resub))
+        else:
+            results = list(map(psi4.core.Matrix.from_array, super().get_result(force_resub)))
         energies = self.get_energies()
 
-
-        corr_result = psi4.driver.driver_cbs.corl_xtpl_helgaker_2(f"{self.job_type}",
+        corr_result = cbs_xtpl.corl_xtpl_helgaker_2(f"{self.job_type}",
                                                       zLO=self.options.xtpl_basis_sets[0][1],
                                                       valueLO=results[1],
                                                       zHI=self.options.xtpl_basis_sets[0][0],
                                                       valueHI=results[0])
-        corr_energy = psi4.driver.driver_cbs.corl_xtpl_helgaker_2("energies",
+        corr_energy = cbs_xtpl.corl_xtpl_helgaker_2("energies",
                                                       zLO=self.options.xtpl_basis_sets[0][1],
                                                       valueLO=energies[1],
                                                       zHI=self.options.xtpl_basis_sets[0][0],
@@ -229,35 +237,36 @@ class Xtpl(Procedure):
         # indexes using 2 and 3 instead of -x like in below if statements since we could perform
         # a dz, tz, qz scf but only need the qz and tz in compensating for extrapolating the
         # reference energy with the correlation energy
-        scf_result_corr = psi4.driver.driver_cbs.corl_xtpl_helgaker_2(f"scf correlated {self.job_type}",
+        scf_result_corr = cbs_xtpl.corl_xtpl_helgaker_2(f"scf correlated {self.job_type}",
                                                       zLO=self.options.xtpl_basis_sets[0][1],
                                                       valueLO=results[3],
                                                       zHI=self.options.xtpl_basis_sets[0][0],
                                                       valueHI=results[2])
-        scf_energy_corr = psi4.driver.driver_cbs.corl_xtpl_helgaker_2("scf correlated energies",
+        scf_energy_corr = cbs_xtpl.corl_xtpl_helgaker_2("scf correlated energies",
                                                       zLO=self.options.xtpl_basis_sets[0][1],
                                                       valueLO=energies[3],
                                                       zHI=self.options.xtpl_basis_sets[0][0],
                                                       valueHI=energies[2])
 
         # do the correction for extrapolating with the total energy
-        corr_result = corr_result.np - scf_result_corr.np
+        if psi_version >= 1.6:
+            corr_result = corr_result - scf_result_corr
+        else:
+            corr_result = corr_result.np - scf_result_corr.np
         corr_energy = corr_energy - scf_energy_corr
-
-        
 
         # now perform the extrapolation of the reference energy 
         if self.options.scf_xtpl:
         
             if len(self.procedure_options[-1]) == 5:
-                scf_result = psi4.driver.driver_cbs.scf_xtpl_helgaker_3(f"{self.job_type}",
+                scf_result = cbs_xtpl.scf_xtpl_helgaker_3(f"{self.job_type}",
                                                             zLO=self.options.xtpl_basis_sets[1][-1],
                                                             valueLO=results[-1],
                                                             zMD=self.options.xtpl_basis_sets[1][-2],
                                                             valueMD=results[-2],
                                                             zHI=self.options.xtpl_basis_sets[1][-3],
                                                             valueHI=results[-3])
-                scf_energy = psi4.driver.driver_cbs.scf_xtpl_helgaker_3("energies",
+                scf_energy = cbs_xtpl.scf_xtpl_helgaker_3("energies",
                                                             zLO=self.options.xtpl_basis_sets[1][-1],
                                                             valueLO=energies[-1],
                                                             zMD=self.options.xtpl_basis_sets[1][-2],
@@ -265,28 +274,31 @@ class Xtpl(Procedure):
                                                             zHI=self.options.xtpl_basis_sets[1][-3],
                                                             valueHI=energies[-3])
             elif len(self.procedure_options[-1]) == 4:
-                scf_result = psi4.driver.driver_cbs.scf_xtpl_helgaker_2(f"{self.job_type}",
+                scf_result = cbs_xtpl.scf_xtpl_helgaker_2(f"{self.job_type}",
                                                             zLO=self.options.xtpl_basis_sets[1][-1],
                                                             valueLO=results[-1],
                                                             zHI=self.options.xtpl_basis_sets[1][-2],
                                                             valueHI=results[-2])
-                scf_energy = psi4.driver.driver_cbs.scf_xtpl_helgaker_2("eneriges",
+                scf_energy = cbs_xtpl.scf_xtpl_helgaker_2("eneriges",
                                                             zLO=self.options.xtpl_basis_sets[1][-1],
                                                             valueLO=energies[-1],
                                                             zHI=self.options.xtpl_basis_sets[1][-2],
                                                             valueHI=energies[-2])
         else:
             # don't extrapolate add to largest scf
-            scf_result = psi4.driver.driver_cbs.xtpl_highest_1(f"{self.job_type}",
+            scf_result = cbs_xtpl.xtpl_highest_1(f"{self.job_type}",
                                                    zHI=self.options.xtpl_basis_sets[1][-2],
                                                    valueHI=results[-2])
 
-            scf_energy = psi4.driver.driver_cbs.xtpl_highest_1("eneriges",
+            scf_energy = cbs_xtpl.xtpl_highest_1("eneriges",
                                                    zHI=self.options.xtpl_basis_sets[1][-2],
                                                    valueHI=energies[-2])
 
         # corr_result is already converted from psi4 matrix to numpy array
-        self.result = corr_result + scf_result.np
+        if psi_version >= 1.6:
+             self.result = corr_result + scf_result
+        else:
+             self.result = corr_result + scf_result.np
         self.energy = corr_energy + scf_energy
 
         print("\n\nExtrapolation procedure has finished")

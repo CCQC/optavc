@@ -290,7 +290,7 @@ class AnalyticCalc(Calculation):
                 print(f"Tried to open {output_path}")
             raise
         else:
-            check = re.search(r'^' + status_str, output_text, re.MULTILINE)
+            check = re.search(status_str, output_text, re.MULTILINE)
             if return_text:
                 return check, output_text
             return check
