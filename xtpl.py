@@ -206,7 +206,7 @@ class Xtpl(Procedure):
     def get_result(self, force_resub=False):
         psi_version = float(psi4.__version__[:3])
 
-        if psi_version > 1.6:
+        if psi_version >= 1.6:
             cbs_xtpl = psi4.driver_cbs_helper
         else:
             cbs_xtpl = psi4.driver.driver_cbs
@@ -217,7 +217,7 @@ class Xtpl(Procedure):
         # psi4 specifies basis sets in the order small to large. Indices may be flipped
         # from what you would expect therefore
 
-        if psi_version > 1.6:
+        if psi_version >= 1.6:
             results = np.array(super().get_result(force_resub))
         else:
             results = list(map(psi4.core.Matrix.from_array, super().get_result(force_resub)))
@@ -249,7 +249,7 @@ class Xtpl(Procedure):
                                                       valueHI=energies[2])
 
         # do the correction for extrapolating with the total energy
-        if psi_version > 1.6:
+        if psi_version >= 1.6:
             corr_result = corr_result - scf_result_corr
         else:
             corr_result = corr_result.np - scf_result_corr.np
@@ -295,7 +295,7 @@ class Xtpl(Procedure):
                                                    valueHI=energies[-2])
 
         # corr_result is already converted from psi4 matrix to numpy array
-        if psi_version > 1.6:
+        if psi_version >= 1.6:
              self.result = corr_result + scf_result
         else:
              self.result = corr_result + scf_result.np
