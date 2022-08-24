@@ -3,6 +3,7 @@ import os
 import copy
 
 import psi4
+import optking
 
 from .molecule import Molecule
 from .calculations import AnalyticGradient
@@ -25,60 +26,91 @@ class Optimization():
         self.paths = []  # safety measure. No gradients should share the same path object
 
     def run(self, restart_iteration=0, user_xtpl_restart=None):
+        """This replicates some of the new psi4 optmize driver """
 
         # copy step if restart would have overwritten some steps
         self.copy_old_steps(restart_iteration, user_xtpl_restart)
+
+        psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+        psi4.core.set_active_molecule(psi4_mol_obj)
+        params = psi4.p4util.prepare_options_for_modules()
+        optimizer_params = {k: v.get('value') for k, v in params.pop("OPTKING").items() if v.get('has_changed')}
+
+        opt_object = optking.opt_helper.CustomHelper(psi4_mol_obj, params=optimizer_params)            
+        initial_sym = psi4_mol_obj.schoenflies_symbol()
         
         for iteration in range(self.options.maxiter):
             # compute the gradient for the current molecule --
             # the path for gradient computation is set to "STEP0x"
 
             print(f"\n====================Beginning new step {iteration}======================\n") 
+            current_sym = psi4_mol_obj.schoenflies_symbol()
+            if initial_sym != current_sym:
+                psi4_mol_obj.symmetrize(psi4.core.get_local_option("OPTKING", "CARTESIAN_SYM_TOLERANCE"))
 
+                if psi4_mol_obj.schoenflies_symbol() != initial_sym:
+
+                    raise RuntimeError("""Point group changed! (%s <-- %s) You should restart """
+                                       """using the last geometry in the output, after """
+                                       """carefully making sure all symmetry-dependent """
+                                       """input, such as DOCC, is correct.""" % (current_sym, initial_sym))
+
+            # This tells the calling program whether optking is expecting a hessian right now
+            opt_calcs = opt_object.calculations_needed()
+
+            # compute or lookup hessian
+            if psi4.core.get_option('OPTKING', 'CART_HESS_READ') and (iteration == 0):
+                opt_object.params.cart_hess_read = True
+                opt_object.params.hessian_file = f"{psi4.core.get_writer_file_prefix(psi4_mol_obj.name())}.hess"
+                print(opt_object.params.cart_hess_read)
+                print(opt_object.opt_manager.params.cart_hess_read)
+            elif 'hessian' in opt_calcs:
+                # hessian calculation requested
+                if path == '.':
+                    path = './HESS_{iteration}'
+
+                use_procedure, calc_obj = xtpl_delta_wrapper("HESSIAN", self.molecule, self.options, path)
+                if not use_procedure:
+                    calc_obj = Hessian(self.molecule, self.input_obj, self.options_obj, path)
+
+                hessian = self.run_calc(self, iteration, restart_iteration, calc_obj, self.options.resub)
+                opt_object.HX = hessian.np
+
+            # Compute gradient
             grad_obj = self.create_opt_gradient(iteration)
-            grad = self.run_gradient(iteration, restart_iteration, grad_obj)
+            grad = self.run_calc(iteration, restart_iteration, grad_obj, force_resub=self.options.resub)
             ref_energy = grad_obj.get_reference_energy()
             self.step_molecules.append(self.molecule)
-            
-            # if self.options.xtpl:
-            #     xtpl_gradients = self.create_xtpl_gradients(iteration, restart_iteration,
-            #                                                 user_xtpl_restart)
-            #     ref_energy, grad = self.run_xtpl_gradients(iteration, restart_iteration,
-            #                                                xtpl_gradients)
-            # else:
-            #     grad_obj = self.create_opt_gradient(iteration)
-            #     grad = self.run_gradient(iteration, restart_iteration, grad_obj)
-            #     ref_energy = grad_obj.get_reference_energy()
 
-            try:
-                # put the gradient, energy, and molecule for the current step in psi::Environment
-                # before calling psi4.optking()
-                psi4.core.set_variable('CURRENT ENERGY', ref_energy)
-                psi4.core.set_gradient(grad)
-                psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+            # Pass step data to opt_object
+            opt_object.E = ref_energy
+            opt_object.gX = grad.np
+            opt_object.molsys.geom = psi4.core.get_active_molecule().geometry().np
+            psi4.core.print_out(opt_object.pre_step_str())
+            opt_object.compute()
+            opt_object.take_step()
+            psi4.core.print_out(opt_object.post_step_str())
 
-                if self.options.point_group is not None:  # otherwise autodetect
-                    psi4_mol_obj.reset_point_group(self.options.point_group)
-                psi4.core.set_legacy_molecule(psi4_mol_obj)
-                optking_exit_code = psi4.core.optking()
+            psi4_mol_obj.set_geometry(psi4.core.Matrix.from_array(opt_object.molsys.geom))
+            psi4_mol_obj.update_geometry()
+            self.molecule = Molecule(psi4.core.get_active_molecule())            
 
-                # optking has put the next step geometry in psi::Environment,
-                # so we can grab a copy and cast it
-                # from psi4.Molecule() to Molecule()
-                self.molecule = Molecule(psi4.core.get_legacy_molecule())
-                if optking_exit_code == psi4.core.PsiReturnType.EndLoop:
-                    psi4.core.print_out("Optimizer: Optimization complete!")
-                    break
-                elif optking_exit_code == psi4.core.PsiReturnType.Failure:
-                    raise Exception("Optimizer: Optimization failed!")
+            # Assess step
+            opt_status = opt_object.status()
+            if opt_status == 'CONVERGED':
+  
+                final_energy, final_geom = opt_object.summarize_result()
+                psi4_mol_obj.set_geometry(psi4.core.Matrix.from_array(final_geom))
+                psi4_mol_obj.update_geometry()
 
-                # We finished a step. Certainly, hessian reading should be disabled now!
-                psi4.core.set_local_option('OPTKING', 'CART_HESS_READ', False)
-                psi4.core.set_legacy_molecule(None)
-            except Exception as e:
-                print("An errror was encountered while using psi4 to take a step")
-                print(str(e))
-                raise
+                print('Optimizer: Optimization complete!')
+                psi4.core.print_out('\n    Final optimized geometry and variables:\n')
+                psi4_mol_obj.print_in_input_format()
+                break
+            elif opt_status == "FAILED":
+                psi4.core.print_out('\n    Final optimized geometry and variables:\n')
+                psi4_mol_obj.print_in_input_format()
+                print('Optimizer: Optimization failed!')
 
         if self.options.mpi:
             from .mpi4py_iface import slay
@@ -87,7 +119,7 @@ class Optimization():
         print("\n\n OPTIMIZATION HAS FINISHED!\n\n")
         return grad, ref_energy, self.molecule
 
-    def run_gradient(self, iteration, restart_iteration, grad_obj, force_resub=True):
+    def run_calc(self, iteration, restart_iteration, grad_obj, force_resub=True):
         """ run a single gradient for an optimization. Reaping if iteration, restart_iteration,
         and xtpl_reap indicate this is possible
 
@@ -114,13 +146,13 @@ class Optimization():
 
         try:
             if iteration < restart_iteration:
-                grad = grad_obj.get_result(force_resub)  # could be 1 or more gradients
+                result = grad_obj.get_result(force_resub)  # could be 1 or more gradients
             else:
                 # self.enforce_unique_paths(grad_obj)
-                grad = grad_obj.compute_result()
+                result = grad_obj.compute_result()
         except RuntimeError as e:
             print(str(e))
-            print(f"[CRITICAL] - could not compute gradient at step {iteration}")
+            print(f"[CRITICAL] - could not compute {calc_obj.__class__.__name__} at step {iteration}")
             raise
         except FileNotFoundError:
             print(f"Missing an output file: {self.options.output_name}")
@@ -129,7 +161,7 @@ class Optimization():
             print(str(e))
             raise
 
-        return psi4.core.Matrix.from_array(grad)
+        return psi4.core.Matrix.from_array(result)
 
     def create_opt_gradient(self, iteration):
         """  Create Gradient with path and name updated by iteration
