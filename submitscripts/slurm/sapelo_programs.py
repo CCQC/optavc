@@ -37,7 +37,6 @@ mkdir -p $scratch_dir
 
 time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
 
-tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
 rm $scratch_dir -r
 
 """
@@ -53,7 +52,6 @@ mkdir -p $scratch_dir
 
 time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
 
-tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
 rm $scratch_dir -r
 """
 
@@ -67,7 +65,6 @@ mkdir -p $scratch_dir
 
 time molpro -n $NSLOTS -n -t $THREADS --nouse-logfile --no-xml-output --output $SLURM_SUBMIT_DIR/{output_name} --directory $scratch_dir {input_name}
 
-tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
 rm $scratch_dir -r
 """
 
@@ -82,7 +79,6 @@ mkdir -p $scratch_dir
 
 time molpro -n $NSLOTS -t $THREADS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
 
-tar -cvzf molpro_tmp.tar.gz $scratch_dir/*
 rm $scratch_dir -r
 """
 
