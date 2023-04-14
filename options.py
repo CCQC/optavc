@@ -1,4 +1,3 @@
-import psi4
 import os
 import socket
 import copy
@@ -382,7 +381,13 @@ class Options(object):
 
             self.command = kwargs.pop("command")
             # self.submitter = compute
-        Options.initialize_psi_options(kwargs)
+        try:
+            Options.initialize_psi_options(kwargs)
+        except ImportError as e:
+            if kwargs.pop('ignore_psi4'):
+                pass
+            else:
+                raise e
 
     @property
     def scratch(self):
@@ -1091,6 +1096,7 @@ class Options(object):
 
     @staticmethod
     def initialize_psi_options(kwargs):
+        import psi4
         for key, value in kwargs.items():
             key = key.upper()
             psi4.core.print_options()

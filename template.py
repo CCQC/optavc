@@ -1,4 +1,3 @@
-import numpy as np
 import re
 from . import regex
 from .molecule import Molecule
