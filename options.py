@@ -69,6 +69,11 @@ class Options(object):
         Allowed names for the cluster are vulcan, sapelo, and sapelo_old which are SGE, SLURM, and PBS/TORQUE clusters.
         if not provided otpavc will use socket.gethostname() to determine what cluster the user is on.
 
+    self.constraint : string
+       default = ''
+       Allowed values are Intel, EPYC, Intel|EPYC. MPI communication errors often happen with mixed node usage on 
+       Sapelo so defining one or the other may help.
+
     self.nslots : int
         default 4
 
