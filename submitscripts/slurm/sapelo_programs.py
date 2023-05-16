@@ -64,33 +64,6 @@ rm $SCRATCH_DIR -r
 
 """
 
-# mixed mpi / omp
-# set scratch to user home area runs from submit_dir
-
-molpro_mpi_omp = """module load intel/2019b
-export PATH=$PATH:/work/jttlab/molpro/2010/bin/
-scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
-mkdir -p $scratch_dir 
-
-time molpro -n $NSLOTS -n -t $THREADS --nouse-logfile --no-xml-output --output $SLURM_SUBMIT_DIR/{output_name} --directory $scratch_dir {input_name}
-
-rm $scratch_dir -r
-"""
-
-# mixed mpi / omp
-# runs from lscratch tar and copy back to working dir
-
-molpro_mpi_omp_lscratch = """module load intel/2019b
-export PATH=$PATH:/work/jttlab/molpro/2010/bin/
-
-scratch_dir=/lscratch/$USER/tmp/$SLRUM_JOB_ID
-mkdir -p $scratch_dir
-
-time molpro -n $NSLOTS -t $THREADS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
-
-rm $scratch_dir -r
-"""
-
 orca_common = """#Set MPI Variables
 module load ORCA/4.2.1-gompi-2019b
 export OMP_NUM_THREADS=1
