@@ -319,12 +319,12 @@ class Cluster:
 
             if self.cluster_name == 'SAPELO':
 
-                # choose program string
-                if progname == 'molpro':
-                    constraint = 'Intel'
-                else:
+                if options.constraint == '':
                     constraint = 'EPYC|Intel'
+                else:
+                    constraint = options.constraint
 
+                # choose program string
                 prog = sapelo_programs.progdict.get(options.parallel).get(scratch).get(progname)
                 prog = prog.format(**in_out)
                 odict.update({'prog': prog, 'constraint': constraint})

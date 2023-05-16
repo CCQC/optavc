@@ -29,30 +29,39 @@ rm $PSI_SCRATCH -r
 # mpi only
 # set scratch dir to home area but run from submit_dir
 
-molpro_mpi = """module load intel/2019b
-export PATH=$PATH:/work/jttlab/molpro/2010/bin/
+molpro_mpi = """module load intel/2021a
 
-scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
-mkdir -p $scratch_dir
+export SUBMIT_DIR=$SLURM_SUBMIT_DIR
 
-time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
+# to change scratch dir to use local machine scratch
+export SCRATCH_DIR=/scratch/$USER/tmp/$SLURM_JOB_ID
+mkdir -p $SCRATCH_DIR
+export SINGULARITY_BIND="$SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-rm $scratch_dir -r
+mpirun -n $NSLOTS singularity exec /work/jttlab/containers/molpro_mpipr.sif \
+molpro.exe input.dat --output $SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+
+rm $SCRATCH_DIR -r
 
 """
 
 # mpi only
 # copy everything to lscratch to run and set scratch to lscratch
 
-molpro_mpi_lscratch = """module load intel/2019b
-export PATH=$PATH:/work/jttlab/molpro/2010/bin/
+molpro_mpi_lscratch = """module load intel/2021a
 
-scratch_dir=/lscratch/$USER/tmp/$SLRUM_JOB_ID
-mkdir -p $scratch_dir
+export SUBMIT_DIR=$SLURM_SUBMIT_DIR
 
-time molpro -n $NSLOTS --nouse-logfile --no-xml-output --output {output_name} --directory $scratch_dir {input_name}
+# to change scratch dir to use local machine scratch
+export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
+mkdir -p $SCRATCH_DIR
+export SINGULARITY_BIND="$SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-rm $scratch_dir -r
+mpirun -n $NSLOTS singularity exec /work/jttlab/containers/molpro_mpipr.sif \
+molpro.exe input.dat --output $SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+
+rm $SCRATCH_DIR -r
+
 """
 
 # mixed mpi / omp
