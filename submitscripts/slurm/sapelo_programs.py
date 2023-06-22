@@ -208,14 +208,6 @@ progdict = {
             "molpro": molpro_mpi,
             "cfour": cfour_mpi
             }
-        },
-    "mixed": {
-        "lscratch": {
-            "molpro": molpro_mpi_omp_lscratch
-            },
-        "scratch": {
-            "molpro": molpro_mpi_omp
-            }
         }
 }
 
