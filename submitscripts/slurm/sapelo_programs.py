@@ -1,8 +1,8 @@
 # use sapelo2 work area (called scratch)
 # no need to copy set psi_scratch variable
 
-fermi = """ module load Julia/1.6.1-linux-x86_64
-module load intel/2019b
+fermi = """module load Julia/1.8.2-linux-x86_64
+module load intel/2023a
 
 julia {input_name} 
 
@@ -29,7 +29,7 @@ rm $PSI_SCRATCH -r
 # mpi only
 # set scratch dir to home area but run from submit_dir
 
-molpro_mpi = """module load intel/2021a
+molpro_mpi = """module load intel/2023a
 
 export SUBMIT_DIR=$SLURM_SUBMIT_DIR
 
@@ -48,7 +48,7 @@ rm $SCRATCH_DIR -r
 # mpi only
 # copy everything to lscratch to run and set scratch to lscratch
 
-molpro_mpi_lscratch = """module load intel/2021a
+molpro_mpi_lscratch = """module load intel/2023a
 
 export SUBMIT_DIR=$SLURM_SUBMIT_DIR
 
@@ -65,7 +65,7 @@ rm $SCRATCH_DIR -r
 """
 
 orca_common = """#Set MPI Variables
-module load ORCA/4.2.1-gompi-2019b
+module load ORCA/5.0.4-gompi-2022a
 export OMP_NUM_THREADS=1
 
 # Set other variables
@@ -106,7 +106,7 @@ mkdir -p $scratch_dir
 
 cfour_common = """
 # make sure MRCC is around just in case
-export PATH=$PATH:/work/jttlab/mrcc/2019/
+export PATH=$PATH:/work/jttlab/mrcc/2020/
 prefix=/apps/eb/$module/
 module load $module
 
