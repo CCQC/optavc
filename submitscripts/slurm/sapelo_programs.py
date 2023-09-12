@@ -31,15 +31,13 @@ rm $PSI_SCRATCH -r
 
 molpro_mpi = """module load intel/2023a
 
-export SUBMIT_DIR=$SLURM_SUBMIT_DIR
-
 # to change scratch dir to use local machine scratch
 export SCRATCH_DIR=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
-export SINGULARITY_BIND="$SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
+export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-mpirun -n $NSLOTS singularity exec /work/jttlab/containers/molpro_mpipr.sif \
-molpro.exe input.dat --output $SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
+molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
 
@@ -50,15 +48,13 @@ rm $SCRATCH_DIR -r
 
 molpro_mpi_lscratch = """module load intel/2023a
 
-export SUBMIT_DIR=$SLURM_SUBMIT_DIR
-
 # to change scratch dir to use local machine scratch
 export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
-export SINGULARITY_BIND="$SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
+export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-mpirun -n $NSLOTS singularity exec /work/jttlab/containers/molpro_mpipr.sif \
-molpro.exe input.dat --output $SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
+molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
 
