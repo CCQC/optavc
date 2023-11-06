@@ -1,8 +1,8 @@
 # use sapelo2 work area (called scratch)
 # no need to copy set psi_scratch variable
 
-fermi = """ module load Julia/1.6.1-linux-x86_64
-module load intel/2019b
+fermi = """module load Julia/1.8.2-linux-x86_64
+module load intel/2023a
 
 julia {input_name} 
 
@@ -29,17 +29,15 @@ rm $PSI_SCRATCH -r
 # mpi only
 # set scratch dir to home area but run from submit_dir
 
-molpro_mpi = """module load intel/2021a
-
-export SUBMIT_DIR=$SLURM_SUBMIT_DIR
+molpro_mpi = """module load intel/2023a
 
 # to change scratch dir to use local machine scratch
 export SCRATCH_DIR=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
-export SINGULARITY_BIND="$SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
+export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-mpirun -n $NSLOTS singularity exec /work/jttlab/containers/molpro_mpipr.sif \
-molpro.exe input.dat --output $SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
+molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
 
@@ -48,24 +46,22 @@ rm $SCRATCH_DIR -r
 # mpi only
 # copy everything to lscratch to run and set scratch to lscratch
 
-molpro_mpi_lscratch = """module load intel/2021a
-
-export SUBMIT_DIR=$SLURM_SUBMIT_DIR
+molpro_mpi_lscratch = """module load intel/2023a
 
 # to change scratch dir to use local machine scratch
 export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
-export SINGULARITY_BIND="$SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
+export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-mpirun -n $NSLOTS singularity exec /work/jttlab/containers/molpro_mpipr.sif \
-molpro.exe input.dat --output $SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
+molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
 
 """
 
 orca_common = """#Set MPI Variables
-module load ORCA/4.2.1-gompi-2019b
+module load ORCA/5.0.4-gompi-2022a
 export OMP_NUM_THREADS=1
 
 # Set other variables
@@ -106,7 +102,7 @@ mkdir -p $scratch_dir
 
 cfour_common = """
 # make sure MRCC is around just in case
-export PATH=$PATH:/work/jttlab/mrcc/2019/
+export PATH=$PATH:/work/jttlab/mrcc/2020/
 prefix=/apps/eb/$module/
 module load $module
 
@@ -207,14 +203,6 @@ progdict = {
             "orca": orca,
             "molpro": molpro_mpi,
             "cfour": cfour_mpi
-            }
-        },
-    "mixed": {
-        "lscratch": {
-            "molpro": molpro_mpi_omp_lscratch
-            },
-        "scratch": {
-            "molpro": molpro_mpi_omp
             }
         }
 }
