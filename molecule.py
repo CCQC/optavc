@@ -77,8 +77,8 @@ class Molecule(object):
         self.units = geom_units
         self.geom = geom
 
-    def cast_to_psi4_molecule_object(self):
+    def cast_to_psi4_molecule_object(self, fix_com=False, fix_orientation=False):
         # psi4.efp_init() # JPM - Maybe the original use case needed this library?
-        mol = psi4.core.Molecule.from_string(str(self))
+        mol = psi4.core.Molecule.from_string(str(self), fix_com=fix_com, fix_orientation=fix_orientation)
         mol.update_geometry()
         return mol

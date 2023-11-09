@@ -344,7 +344,7 @@ class Gradient(FiniteDifferenceCalc):
     def __init__(self, molecule: Molecule, input_obj: InputFile, options: Options, path):
         super().__init__(molecule, input_obj, options, path)
         
-        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object(self.options.fix_com, self.options.fix_orientation)
         if self.options.point_group is not None:
             self.psi4_mol_obj.reset_point_group(self.options.point_group)
 
@@ -430,13 +430,13 @@ class Hessian(FiniteDifferenceCalc):
     def __init__(self, molecule, input_obj, options, path):
         super().__init__(molecule, input_obj, options, path)
     
-        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object(self.options.fix_com, self.options.fix_orientation)
 
-        if not np.allclose(self.psi4_mol_obj.geom, self.molecule.geom):
+        if not np.allclose(self.psi4_mol_obj.geometry(), self.molecule.geom):
             raise RuntimeError("Psi4's molecule was rotated")
 
         self.create_hess, self.compute_hess, self.constructor = self.findif_methods()
-        self.findifrec = self.create_hess(self.psi4_mol_obj, -1, stencil_size=self.options.findif_rec)
+        self.findifrec = self.create_hess(self.psi4_mol_obj, -1, stencil_size=self.options.findif_points)
         self.make_calculations()
         self.energy = None  # Allow procedure to set
 

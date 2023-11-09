@@ -84,7 +84,7 @@ def run_optavc(jobtype,
         else:
             calc_obj.get_result(force_resub=True)
         
-        final_hess_printout(calc_obj)
+        final_hess_printout(calc_obj, options_obj)
         return calc_obj.result, calc_obj.energy, calc_obj.molecule
 
 
@@ -139,7 +139,7 @@ def create_calc_objects(jobtype, molecule, options_obj, input_obj, path='.'):
     return calc_obj, calc_type
 
 
-def final_hess_printout(hess_obj):
+def final_hess_printout(hess_obj, options):
     """ Here because we don't want printouts for each hessian in the XtpleDelta procedure """
     import psi4
     psi_version = float(psi4.__version__[:3])
@@ -149,7 +149,7 @@ def final_hess_printout(hess_obj):
     psi4.core.print_out("============================================================\n")
     
     psi4.core.print_out("\nThe final computed hessian is:\n\n")        
-    psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object()
+    psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object(fix_com=options.fix_com, fix_orientation=options.fix_orientation)
     wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'def2-tzvp')
     wfn.set_hessian(psi4.core.Matrix.from_array(hess_obj.result))
     wfn.set_energy(hess_obj.energy)
