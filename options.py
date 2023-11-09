@@ -308,6 +308,7 @@ class Options(object):
         self.backup_template = kwargs.pop("backup_template", None)
         # self.success_regex = kwargs.pop("success_regex", "")
         # self.fail_regex = kwargs.pop("fail_regex", "")
+        self.findif_points = kwargs.get("findif_points", None)
 
         # Standard cluster options. defaults will be provided where able
         self.cluster = kwargs.pop("cluster", None)
