@@ -68,6 +68,11 @@ class Options(object):
         Allowed names for the cluster are vulcan, sapelo, and sapelo_old which are SGE, SLURM, and PBS/TORQUE clusters.
         if not provided otpavc will use socket.gethostname() to determine what cluster the user is on.
 
+    self.constraint : string
+       default = ''
+       Allowed values are Intel, EPYC, Intel|EPYC. MPI communication errors often happen with mixed node usage on 
+       Sapelo so defining one or the other may help.
+
     self.nslots : int
         default 4
 
@@ -315,6 +320,7 @@ class Options(object):
         self.nslots = kwargs.pop("nslots", 4)
         self.threads = kwargs.pop("threads", 1)  # for mixed mpi(nslots)/omp(threads)
         self.scratch = kwargs.pop('scratch', 'SCRATCH')
+        self.constraint = kwargs.pop('constraint', '') # no default
         self.parallel = kwargs.pop("parallel", "")  # default in setter
         self.program = kwargs.pop("program", "")  # no default
         self.time_limit = kwargs.pop("time_limit", "10:00:00")
@@ -400,6 +406,17 @@ class Options(object):
             self._scratch = val.upper()
         else:
             raise ValueError("scratch may be LCSRATCH or SCRATCH. Defaults to SCRATCH")
+
+    @property
+    def constraint(self):
+        return self._constraint
+ 
+    @constraint.setter
+    def constraint(self, val=""):
+        if val.upper() in ['', 'INTEL', 'EPYC', 'EPYC|INTEL']:
+            self._constraint = val.upper()
+        else:
+            raise ValueError("constraint only set for Sapelo.")
 
     @property
     def program(self):

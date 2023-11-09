@@ -12,7 +12,6 @@ from .submitscripts.sge import sge, vulcan_programs
 from .submitscripts.pbs import pbs, sapelo_old_programs
 from .submitscripts.slurm import slurm, sapelo_programs
 
-
 class Cluster:
     """ To add a new cluster one must add the following strings to cluster_attributes
 
@@ -260,7 +259,7 @@ class Cluster:
             return pbs.pbs_basic
         elif self.cluster_name == "SAPELO":
             
-            if parallel in ['mpi', 'mixed']:
+            if parallel in ['mpi']:
                 if email:
                     return slurm.slurm_mpi_email
                 return slurm.slurm_mpi
@@ -319,12 +318,12 @@ class Cluster:
 
             if self.cluster_name == 'SAPELO':
 
-                # choose program string
-                if progname == 'molpro':
-                    constraint = 'Intel'
-                else:
+                if options.constraint == '':
                     constraint = 'EPYC|Intel'
+                else:
+                    constraint = options.constraint
 
+                # choose program string
                 prog = sapelo_programs.progdict.get(options.parallel).get(scratch).get(progname)
                 prog = prog.format(**in_out)
                 odict.update({'prog': prog, 'constraint': constraint})
