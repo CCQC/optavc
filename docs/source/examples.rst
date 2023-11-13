@@ -11,6 +11,34 @@ Optimizations
 Basic
 ~~~~~
 
+For the most basic input, only the `program` and `energy_regex` keywords are required.
+This tells optavc what program to the inputs generated from `template.dat` with and how
+to get the resulting energy from each output.
+
+The regex matches a string that looks like::
+
+        CCSD(T) energy   -123.4567891234
+
+Note that the slashes are required to "escape" the parenthesis so that the
+parenthesis are matched as a literal character. The true meaning of the parentheses
+in regex is shown below. `(-?\d*\.\d*)`. This matches a string that can or may not contain
+a `-` (In QM all our energies should be negative) followed by 0 or more numeric digits,
+followed by a dot `.` followed by 0 or more numeric digits. Since we know that there must be
+more than 1 digit `\d+` is likely more fitting for the regex but this isn't strictly nessecary for
+our purposes. Surrounding these characters in parentheses creates a capture group which allows
+optavc to request the value itself from the regex module instead of just the entire line that the
+whole regex string matches.
+
+For the sake of the example we set a few more options:
+`max_force_g_convergence`: This isn't an optavc keyword, this keyword is sent through optavc
+to psi4/optking to control how tightly the geometry is converged. Optavc just runs optking
+so all of optking's keywords can be set here in optavc.
+
+`points`: This controls the type of finite difference scheme Psi4 will use. This is an optavc
+keyword that is used to control Psi4's internal machinery manually.
+
+.. _BasicExample:
+
 A bare bones input file::
 
     import optavc
@@ -22,7 +50,7 @@ A bare bones input file::
         
         # required to modify psi4
         'max_force_g_convergence': 1e-7,
-        'findif_points': 5,
+        'points': 5,
 
     }
 
@@ -55,11 +83,15 @@ An input file with uneeded input that few clusters can support well::
 
 First there's no need to use the cluster keyword. optavc will autodetect the cluster. Second
 If you're gonna be doing finite differences, the cluster will never be able to run so many jobs with these
-memory requirements. Computer hours matters just as much as Human hours. Analytic Gradients offer better
-convergence behavior anyway - see every geometry optimization paper from the 90s.
+memory requirements. Computer hours matters just as much as human hours. Analytic Gradients offer better
+convergence behavior anyway - see every geometry optimization paper from the 90s. Instead you should try
+setting `'dertype': 'hessian'` and reduce the memory requirements as far as possible. You can check how much
+memory a job required using the command `sacct -e`
 
 Gradient
 ~~~~~~~~
+
+.. _GradExample:
 
 optimization using cfour analytic CCSD(T) gradients::
 
@@ -67,6 +99,7 @@ optimization using cfour analytic CCSD(T) gradients::
     
     cfour_grad_regex = r"\s*Molecular\s*gradient\s*-+\s*"
     # "([A-Z]+\s#[0-9]+\s[xyz]\s*-?\d+\.\d+\s*)+"
+    # This part is not required anymore. Only the header is required.
     
     options = {
         'program': 'cfour@2.0+mpi',
@@ -79,6 +112,11 @@ optimization using cfour analytic CCSD(T) gradients::
     }
     
     optavc.run_optavc('OPT', options, restart_iteration=0)
+
+This is an example of how you can use a regex to fetch the gradient from an output file.
+In practice there is no need to do this you should use the `deriv_file` keyword. For cfour
+this is used automatically and cannot be turned off actually because without the GRD file
+the gradient can be rotated strangly and introduce errors in the calculation.
 
 Transition State
 ~~~~~~~~~~~~~~~~
@@ -115,11 +153,15 @@ stationary point character::
 
     optavc.run_optavc('HESS', options, molecule=molecule)
 
-There are some optking options left in the input, psi4 will set these options, but no calls will be made to optking so there's no
-need to remove them.
+There are some optking options left in the input for the second part of this calculation,
+psi4 will set these options, but no calls will be made to optking so there's no need to remove them before
+the hessian calculation. This really just shows how one can save the molecule from one optavc calculation
+and pass it into a second calculation.
 
 Extrapolation
 ~~~~~~~~~~~~~
+
+.. _XtplExample:
 
 The following example demonstrates a simple two point extrapolation of gradients via singlepoints::
 
@@ -137,7 +179,12 @@ The following example demonstrates a simple two point extrapolation of gradients
 
     optavc.run_optavc("OPT", options_kwargs)
 
-All other options will resort to default values as described elsewhere.
+All other options will resort to default values as described elsewhere. This calculation uses the same
+regex for each basis set but different template files. The reverse could also be done: different regexes
+for different basis sets but the same input file to run both. Note that the regexes are only input once.
+They are broadcast to the expected length so internally the keyword looks like::
+
+        "xtpl_energy_regexes" : [[molpro_ccsdt_regex, molpro_ccsdt_regex], [[molpro_scf_regex, molpro_scf_regex]],
 
 Composite
 ~~~~~~~~~

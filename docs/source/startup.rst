@@ -68,11 +68,11 @@ add the following line to your `.bashrc` or the rc file for your shell of choice
     export PYTHONPATH=$PYTHONPATH:~/github/
 
 Note that optavc's package layout is not the conventional package layout for python projects. If you have to
-manually configure your python path for other packages you'd like need to add the repo directory to your `PYTHONPATH` like::
+manually configure your python path for other packages you'd likely need to add the repo directory to your `PYTHONPATH` like::
 
     export PYTHONPATH=$PYTHONPATH:~/github/<package-name>
 
-The import thing is that your environment variable should point to a directory <package-name>
+The important thing is that your environment variable should point to a directory <package-name>
 containing the directory (module) with the `__init__.py` file. i.e. for optavc the following file exists::
 
     export PYTHONPATH=$PYTHONPATH:~/github/optavc/__init__.py
