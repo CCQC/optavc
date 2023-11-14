@@ -1,4 +1,4 @@
-QuickStart
+Quick Start
 ==========
 
 Background and Purpose
@@ -123,7 +123,7 @@ how the calculations themselves are going.
 
 .. autofunction:: optavc.main.run_optavc
 
-Warnings/Changelog - READ THIS!!
+Warnings/Change-log - READ THIS!!
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A few important changes and quirks that users should be notified about:
