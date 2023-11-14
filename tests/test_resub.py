@@ -71,8 +71,8 @@ def test_hessian_failures(options, failures, path):
     our test hessian is actually the same calc twice. We pretend here that the ccsd and hf are pulled out of the same
     # output file for the qz and tz calculations """
 
-    options_obj, input_obj, molecule = optavc.initialize_optavc(options) 
-    calc_obj, calc_type = optavc.create_calc_objects('HESS', molecule, options_obj, input_obj, path=f'{path}')
+    options_obj, input_obj, molecule = optavc.main.initialize_optavc(options)
+    calc_obj, calc_type = optavc.main.create_calc_objects('HESS', molecule, options_obj, input_obj, path=f'{path}')
 
     if calc_obj.options.xtpl:
         
@@ -89,13 +89,13 @@ def test_hessian_failures(options, failures, path):
 @pytest.mark.parametrize("options, failures, path", [(options3, grad, "grad"), (options4, grad_xtpl, "xtpl_grad")])
 @pytest.mark.no_calc
 def test_gradient_failures(options, failures, path):
-    """Either output file or the regex lines are removed from the failures. Each list of failures is a STEP """  
+    """Either output file or the regex lines are removed from the failures. Each list of failures is a STEP """
 
-    options_obj, input_obj, molecule = optavc.initialize_optavc(options)
+    options_obj, input_obj, molecule = optavc.main.initialize_optavc(options)
 
     for step in range(4):
 
-        calc_obj, calc_type = optavc.create_calc_objects("OPT", molecule, options_obj, input_obj, path=f'{path}')
+        calc_obj, calc_type = optavc.main.create_calc_objects("OPT", molecule, options_obj, input_obj, path=f'{path}')
         grad_obj = calc_obj.create_opt_gradient(iteration=step)
 
         if options_obj.xtpl:

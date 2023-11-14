@@ -12,8 +12,8 @@ def test_standard_grad():
         'name': 'test',
     }
 
-    options_obj, input_obj, molecule = optavc.initialize_optavc(options)
-    calc_obj, calc_type = optavc.create_calc_objects('OPT', molecule, options_obj, input_obj)
+    options_obj, input_obj, molecule = optavc.main.initialize_optavc(options)
+    calc_obj, calc_type = optavc.main.create_calc_objects('OPT', molecule, options_obj, input_obj)
 
     for iteration in range(99): 
         grad_obj = calc_obj.create_opt_gradient(iteration)
@@ -80,8 +80,8 @@ def test_xtpl_grad(option1, option2, option3, option4, expected):
 
     }
 
-    options_obj, input_obj, molecule = optavc.initialize_optavc(options)
-    calc_obj, calc_type = optavc.create_calc_objects('OPT', molecule, options_obj, input_obj)
+    options_obj, input_obj, molecule = optavc.main.initialize_optavc(options)
+    calc_obj, calc_type = optavc.main.create_calc_objects('OPT', molecule, options_obj, input_obj)
 
     for iteration in range(10):
         xtpl_obj = calc_obj.create_opt_gradient(iteration) 
@@ -118,8 +118,8 @@ def test_complex_molecule():
         'sleepy_sleep_time': 10
     }
 
-    options_obj, input_obj, molecule = optavc.initialize_optavc(basic_options)
-    calc_obj, calc_type = optavc.create_calc_objects('OPT', molecule, options_obj, input_obj)
+    options_obj, input_obj, molecule = optavc.main.initialize_optavc(basic_options)
+    calc_obj, calc_type = optavc.main.create_calc_objects('OPT', molecule, options_obj, input_obj)
     grad_obj = calc_obj.create_opt_gradient(iteration=0)
     assert len(grad_obj.calculations) == 247
 

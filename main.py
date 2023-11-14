@@ -12,7 +12,7 @@ run_optavc_mpi()
 """
 
 from optavc.options import Options
-
+from . import optimize
 
 def run_optavc(jobtype, 
                options_dict, 

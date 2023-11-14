@@ -431,10 +431,6 @@ class Hessian(FiniteDifferenceCalc):
         super().__init__(molecule, input_obj, options, path)
     
         self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object(self.options.fix_com, self.options.fix_orientation)
-
-        if not np.allclose(self.psi4_mol_obj.geometry(), self.molecule.geom):
-            raise RuntimeError("Psi4's molecule was rotated")
-
         self.create_hess, self.compute_hess, self.constructor = self.findif_methods()
         self.findifrec = self.create_hess(self.psi4_mol_obj, -1, stencil_size=self.options.findif_points)
         self.make_calculations()
