@@ -11,6 +11,8 @@ of the options for composite calculations are given here than in the Options are
 Option Format
 ~~~~~~~~~~~~~
 
+.. _XtplOptionFormat:
+
 xtpl options and delta options are provided as a list of lists. With xtpl_option[0] corresponding to the options for each
 calculation including post-HF correlation and xtpl_option[1] containing options for the Hartree Fock calculations. The options
 in these two lists are given in order of decreasing basis set size. i.e::

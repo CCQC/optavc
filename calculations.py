@@ -497,7 +497,7 @@ class AnalyticGradient(AnalyticCalc):
             molecule, cfour_grad = cfour.harvest_GRD(grad_file)
             cfour_mol, _, _, _, c4_unique = molecule.to_arrays()
 
-            psi_mol, _, _, _, psi_unique = self.molecule.cast_to_psi4_molecule_object().to_arrays()
+            psi_mol, _, _, _, psi_unique = self.molecule.cast_to_psi4_molecule_object(fix_com=self.options.fix_com, fix_orientation=self.options.fix_orientation).to_arrays()
 
             print("rotating molecule and gradient with qcelemental align")
             rmsd, qcel_alignment_mill = qcel.molutil.align.B787(rgeom=psi_mol,
@@ -628,7 +628,7 @@ class AnalyticHessian(AnalyticCalc):
         molecule, cfour_grad = cfour.harvest_GRD(grad_file)
         cfour_mol, _, _, _, c4_unique = molecule.to_arrays()
 
-        psi_mol, _, _, _, psi_unique = self.molecule.cast_to_psi4_molecule_object().to_arrays()
+        psi_mol, _, _, _, psi_unique = self.molecule.cast_to_psi4_molecule_object(fix_com=self.options.fix_com, fix_orientation=self.options.fix_orientation).to_arrays()
 
         print("rotating molecule and gradient with qcelemental align")
         rmsd, qcel_alignment_mill = qcel.molutil.align.B787(rgeom=psi_mol,

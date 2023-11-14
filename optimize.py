@@ -7,7 +7,7 @@ import optking
 
 from .molecule import Molecule
 from .calculations import AnalyticGradient
-from .findifcalcs import Gradient
+from .findifcalcs import Gradient, Hessian
 from .xtpl import xtpl_delta_wrapper
 
 
@@ -25,7 +25,7 @@ class Optimization():
         self.xtpl_inputs = xtpl_inputs
         self.paths = []  # safety measure. No gradients should share the same path object
 
-    def run(self, restart_iteration=0, user_xtpl_restart=None):
+    def run(self, restart_iteration=0, user_xtpl_restart=None, path="."):
         """This replicates some of the new psi4 optmize driver """
 
         # copy step if restart would have overwritten some steps
@@ -71,9 +71,9 @@ class Optimization():
 
                 use_procedure, calc_obj = xtpl_delta_wrapper("HESSIAN", self.molecule, self.options, path)
                 if not use_procedure:
-                    calc_obj = Hessian(self.molecule, self.input_obj, self.options_obj, path)
+                    calc_obj = Hessian(self.molecule, self.inp_file_obj, self.options, path)
 
-                hessian = self.run_calc(self, iteration, restart_iteration, calc_obj, self.options.resub)
+                hessian = self.run_calc(iteration, restart_iteration, calc_obj, self.options.resub)
                 opt_object.HX = hessian.np
 
             # Compute gradient
@@ -152,7 +152,7 @@ class Optimization():
                 result = grad_obj.compute_result()
         except RuntimeError as e:
             print(str(e))
-            print(f"[CRITICAL] - could not compute {calc_obj.__class__.__name__} at step {iteration}")
+            print(f"[CRITICAL] - could not compute {grad_obj.__class__.__name__} at step {iteration}")
             raise
         except FileNotFoundError:
             print(f"Missing an output file: {self.options.output_name}")

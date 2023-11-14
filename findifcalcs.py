@@ -7,7 +7,9 @@ import psi4
 
 from .calculations import Calculation, SinglePoint, AnalyticGradient
 from .cluster import Cluster
-
+from .molecule import Molecule
+from .template import InputFile
+from .options import Options
 
 class FiniteDifferenceCalc(Calculation):
     """ A Calculation consisting of a series of AnalyticCalc objects with needed machinery to submit,
@@ -51,7 +53,7 @@ class FiniteDifferenceCalc(Calculation):
 
         # This essentially defines an abstract attribute. Forces a child class to set these
         # attributes without setting here
-        self.findifrec: object
+        self.findifrec: dict
 
         # child class will set constructor Singlepoint or AnalyticGradient
         self.constructor = None
@@ -65,6 +67,14 @@ class FiniteDifferenceCalc(Calculation):
         or gradient calculations """
         ref_molecule = self.molecule.copy()
         ref_path = os.path.join(self.path, "{:d}".format(1))
+
+        if self.constructor is None:
+            raise ValueError(
+                "Child class of FiniteDifferenceCalc did not set constructor."
+                "See findifmethods() for exmaple. Constructor should be set to"
+                "SinglePoint, Gradient, or Hessian")
+
+        # Create non displaced reference point either a SinglePoint, AnalyticGradient, etc...
         ref_calc = self.constructor(ref_molecule, self.inp_file_obj, self.options, path=ref_path,
                                     disp_num=1, key='reference')
         ref_calc.options.name = f"{self.options.name}-1"
@@ -89,9 +99,10 @@ class FiniteDifferenceCalc(Calculation):
 
         if isinstance(self.result, np.ndarray):
             return self.result
-        else:
-            #psi4.core.Matrix
+        elif isinstance(self.result, psi4.core.Matrix):
             return self.result.np
+        else:
+            raise RuntimeError("get_result() was called on an invalid type. Calculation may have errored")
 
     def get_reference_energy(self):
         """Get result stored in the finite difference dictionary
@@ -330,15 +341,15 @@ class Gradient(FiniteDifferenceCalc):
 
     """
 
-    def __init__(self, molecule, input_obj, options, path):
+    def __init__(self, molecule: Molecule, input_obj: InputFile, options: Options, path):
         super().__init__(molecule, input_obj, options, path)
         
-        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object(self.options.fix_com, self.options.fix_orientation)
         if self.options.point_group is not None:
             self.psi4_mol_obj.reset_point_group(self.options.point_group)
 
         self.create_grad, self.compute_grad, self.constructor = self.findif_methods()
-        self.findifrec = self.create_grad(self.psi4_mol_obj)
+        self.findifrec = self.create_grad(self.psi4_mol_obj, stencil_size=self.options.findif_points)
         self.make_calculations()
 
     def run(self):
@@ -419,9 +430,9 @@ class Hessian(FiniteDifferenceCalc):
     def __init__(self, molecule, input_obj, options, path):
         super().__init__(molecule, input_obj, options, path)
     
-        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object()
+        self.psi4_mol_obj = self.molecule.cast_to_psi4_molecule_object(self.options.fix_com, self.options.fix_orientation)
         self.create_hess, self.compute_hess, self.constructor = self.findif_methods()
-        self.findifrec = self.create_hess(self.psi4_mol_obj, -1)
+        self.findifrec = self.create_hess(self.psi4_mol_obj, -1, stencil_size=self.options.findif_points)
         self.make_calculations()
         self.energy = None  # Allow procedure to set
 
@@ -450,22 +461,21 @@ class Hessian(FiniteDifferenceCalc):
         AnalyticCalc objects need to be made
         """
 
-        try:
-            psi_version = psi4.__version__
-        except UnboundLocalError:
-            import psi4
-            psi_version = psi4.__version__
+        # There used to be an unbound check in case Psi4 had not been imported.
+        # Removed since psi4 is now imported at beginning of file
+        psi_version = psi4.__version__
 
         # need to prevent the interpreter from seeing methods for the alternate
         # version
+        # This was last checked as of 1.9 pre-release
         if float(psi_version[:3]) >= 1.4:
             if self.options.dertype == 'ENERGY':
-                create = psi4.driver_findif.hessian_from_energies_geometries 
-                compute = psi4.driver_findif.assemble_hessian_from_energies
+                create = psi4.driver.driver_findif.hessian_from_energies_geometries 
+                compute = psi4.driver.driver_findif.assemble_hessian_from_energies
                 constructor = SinglePoint 
             else:
-                create = psi4.driver_findif.hessian_from_gradients_geometries
-                compute = psi4.driver_findif.assemble_hessian_from_gradients
+                create = psi4.driver.driver_findif.hessian_from_gradients_geometries
+                compute = psi4.driver.driver_findif.assemble_hessian_from_gradients
                 constructor = AnalyticGradient
         else:
             if self.options.dertype == 'ENERGY':
@@ -476,7 +486,6 @@ class Hessian(FiniteDifferenceCalc):
                 create = psi4.driver_findif.hessian_from_gradient_geometries
                 compute = psi4.driver_findif.compute_hessian_from_gradients
                 constructor = AnalyticGradient
-                
         return create, compute, constructor
 
     def build_findif_dict(self):

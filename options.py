@@ -1,4 +1,3 @@
-import psi4
 import os
 import socket
 import copy
@@ -30,20 +29,8 @@ class Options(object):
     Attributes
     ----------
 
-    template_file_path : string
-        default : 'template.dat'
-
-        string, interpretable as a path, to a template file
-
-    backup_template : string or None
-        default : None
-
-        string, interpretable as a path to a secondary template file if the first has failed.
-        This is only invoked when performing a restart. This is invoked either with
-        *run_optavc("HESS", sow=False)* or *run_optavc("OPT", restart_iteration=<xx>)*
-        For optimizations this only applies to the iteration we restart. It will not persist, so
-        the template_file_path should also be updated to match backup_template. (Only backup_template will
-        overwrite the currently written template files).
+    Options for Running and Reading Quantum Chemistry Outputs
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     energy_regex : string
         python 'raw' string. Should work with multiline mode. Should contain a group which returns
@@ -63,6 +50,46 @@ class Options(object):
         gradient. deriv_regex should be written to match the few lines before the gradient. i.e.
 
         Total Molecular Gradient:
+
+    self.program : string
+        default ""
+
+        name of the program to calculations with orca, molpro, psi4, or cfour
+        The name should at least be sufficiently long to load the module with. i.e. cfour@2.0+mpi is sufficient for
+        vulcan load psi4 is also sufficient isntead of psi4@master.
+
+    template_file_path : string
+        default : 'template.dat'
+
+        string, interpretable as a path, to a template file
+
+    backup_template : string or None
+        default : None
+
+        string, interpretable as a path to a secondary template file if the first has failed.
+        This is only invoked when performing a restart. This is invoked either with
+        *run_optavc("HESS", sow=False)* or *run_optavc("OPT", restart_iteration=<xx>)*
+        For optimizations this only applies to the iteration we restart. It will not persist, so
+        the template_file_path should also be updated to match backup_template. (Only backup_template will
+        overwrite the currently written template files).
+
+    self.input_name
+        default 'input.dat'
+
+        what should the template file be named when it is written into a directory.
+        When running cfour the input file will eventually be named ZMAT but this may occur in a tmp directory
+
+    self.output_name : string
+        default 'output.dat'
+
+    self.input_units : string
+        default "angstrom"
+
+        Make sure to set to bohr if the molecule in your template file. issues will occur and may not be easily
+        recognizable
+
+    Cluster Submit Script Options
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     self.cluster : string
         default = setter
@@ -90,13 +117,6 @@ class Options(object):
 
         Choose between running on local scratch or a network filesystem. Vulcan has only lscratch. Sapelo has both;
         however, lscratch space is limited.
-
-    self.program : string
-        default ""
-
-        name of the program to calculations with orca, molpro, psi4, or cfour
-        The name should at least be sufficiently long to load the module with. i.e. cfour@2.0+mpi is sufficient for
-        vulcan load psi4 is also sufficient isntead of psi4@master.
 
     self.parallel : string
         default = setter
@@ -143,24 +163,12 @@ class Options(object):
         Useful for files like GENBAS which can be pulled by default from the cfour install but may need
         to be overridden
 
-    self.input_name
-        default 'input.dat'
-
-        what should the template file be named when it is written into a directory.
-        When running cfour the input file will eventually be named ZMAT but this may occur in a tmp directory
-
-    self.output_name : string
-        default 'output.dat'
-
-    self.input_units : string
-        default "angstrom"
-
-        Make sure to set to bohr if the molecule in your template file. issues will occur and may not be easily
-        recognizable
-
     self.point_group : string
         default None
         optavc will call psi4.reset_point_group(point_group) to make sure the symmetry is being conserved.
+
+    Options for configuring the finite difference scheme and optavc itself
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     self.dertype : string
         default ENERGY
@@ -174,6 +182,26 @@ class Options(object):
         What file should we look in to fetch the gradient or hessian. if 'output' the output file is serched with
         deriv_regex. Otherwise optavc attempts to read a gradient, or hessian file like cfour's GRD file.
         If program is cfour optavc will force use of the GRD file.
+
+    self.fix_com : bool
+        default False
+
+        Instruct Psi4 to not translate molecule's center of mass to origin. This doesn't affect results
+        for optimizations or frequencies but wiill affect comparing gradients and force constant elements
+        between programs
+
+    self.fix_orientation : bool
+        default False
+
+        Instruct Psi4 to not rotate molecule to align Intertial Axis. This doesn't affect results for
+        optimizations or frequencies but will affect comparing gradients and force constant elemements
+        between programs
+    
+    self.points : Union[int, str],
+        default 3
+
+        Choose how many displacements along each mode to use in finite difference calc (5) +2 +1 0 -1 -2
+        or (3) +1 0 -1
 
     self.mpi : bool
         default None
@@ -199,7 +227,7 @@ class Options(object):
         ths to be set to a relatively large integer. Be careful
 
     self.sleepy_sleep_time : int
-        default 60
+        default 300
 
         Determines the frequency with which optavc will wake up and check the status of its jobs.
 
@@ -214,8 +242,11 @@ class Options(object):
         This is optavc's internal maxiter. Optkings geom_maxiter should not be obeyed since gradients are being
         set manually
 
+    Options for Basis Set Extrapolated Geometries
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
     self.xtpl_basis_sets : None or List[List[int]]
-        This is a required keyword for performing an extrapolation. Optavc will fail is this is set unnecesarily
+        This is a required keyword for performing an extrapolation. Optavc will fail if this is set unnecesarily
         without the other required keywords.
 
         list of lists of cardinal numbers for a basis set extrapolation. See composite gradient section for more
@@ -314,6 +345,9 @@ class Options(object):
         self.backup_template = kwargs.pop("backup_template", None)
         # self.success_regex = kwargs.pop("success_regex", "")
         # self.fail_regex = kwargs.pop("fail_regex", "")
+        self.findif_points = int(kwargs.get("points", 3))
+        self.fix_com = kwargs.pop('fix_com', False)
+        self.fix_orientation = kwargs.pop('fix_orientation', False)
 
         # Standard cluster options. defaults will be provided where able
         self.cluster = kwargs.pop("cluster", None)
@@ -344,7 +378,7 @@ class Options(object):
         self.resub = kwargs.pop("resub", False)
         self.resub_max = kwargs.pop("resub_max", 1)
         self.wait_time = kwargs.pop("wait_time", None)
-        self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
+        self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 300)
         self.maxiter = kwargs.pop("maxiter", 20)
 
         # options for running optimizations using xtpl procedure
@@ -388,7 +422,13 @@ class Options(object):
 
             self.command = kwargs.pop("command")
             # self.submitter = compute
-        Options.initialize_psi_options(kwargs)
+        try:
+            Options.initialize_psi_options(kwargs)
+        except ImportError as e:
+            if kwargs.pop('ignore_psi4'):
+                pass
+            else:
+                raise e
 
     @property
     def scratch(self):
@@ -1108,6 +1148,7 @@ class Options(object):
 
     @staticmethod
     def initialize_psi_options(kwargs):
+        import psi4
         for key, value in kwargs.items():
             key = key.upper()
             psi4.core.print_options()
