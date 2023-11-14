@@ -227,7 +227,7 @@ class Options(object):
         ths to be set to a relatively large integer. Be careful
 
     self.sleepy_sleep_time : int
-        default 60
+        default 300
 
         Determines the frequency with which optavc will wake up and check the status of its jobs.
 
@@ -378,7 +378,7 @@ class Options(object):
         self.resub = kwargs.pop("resub", False)
         self.resub_max = kwargs.pop("resub_max", 1)
         self.wait_time = kwargs.pop("wait_time", None)
-        self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 60)
+        self.sleepy_sleep_time = kwargs.pop("sleepy_sleep_time", 300)
         self.maxiter = kwargs.pop("maxiter", 20)
 
         # options for running optimizations using xtpl procedure
