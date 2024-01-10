@@ -76,7 +76,7 @@ Then run this python script from cmd line as::
     
     nohup python -u <name.py> &
 
-nohup or (no hangup) prevents your process from being terminated by the shell its running in closing. 
+nohup or (no hangup) prevents your process from being terminated by the shell it's running in closing. 
 nohup places all printing to stdout in nohup.out so all of optavc's output will be placed there. optavc
 makes calls to psi4 to perform the finite difference procedure, extrapolations, optimizations etc.
 All output produced from psi4 will be placed by default in output.dat
