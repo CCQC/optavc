@@ -67,7 +67,7 @@ class Optimization():
             elif 'hessian' in opt_calcs:
                 # hessian calculation requested
                 if path == '.':
-                    path = './HESS_{iteration}'
+                    path = f'./HESS_{iteration}'
 
                 use_procedure, calc_obj = xtpl_delta_wrapper("HESSIAN", self.molecule, self.options, path)
                 if not use_procedure:
