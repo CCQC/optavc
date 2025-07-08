@@ -148,7 +148,7 @@ echo " Job complete on `hostname`."
 rm $scratch_dir -r
 """
 
-cfour_serial = """module=cfour/2.1-iompi-2018a-serial
+cfour_serial = """module=cfour/2.1-intel-2021b-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
@@ -156,7 +156,7 @@ mkdir -p $scratch_dir
 
 """ + cfour_common
 
-cfour_serial_lscratch = """module=cfour/2.1-iompi-2018a-serial
+cfour_serial_lscratch = """module=cfour/2.1-intel-2021b-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
@@ -164,7 +164,7 @@ mkdir -p $scratch_dir
 
 """ + cfour_common
 
-cfour_mpi = """module=cfour/2.1-iompi-2018a-mpi
+cfour_mpi = """module=cfour/2.1-intel-2021b-mpi
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
@@ -172,7 +172,7 @@ echo -e "\t$NSLOTS" > ./ncpu   # CFour appears to just claim any and all cpus
 echo -e "\t$NSLOTS" > $scratch_dir/ncpu
 """ + cfour_common
 
-cfour_mpi_lscratch = """module=cfour/2.1-iompi-2018a-mpi
+cfour_mpi_lscratch = """module=cfour/2.1-intel-2021b-mpi
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
