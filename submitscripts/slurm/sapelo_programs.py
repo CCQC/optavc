@@ -1,8 +1,8 @@
 # use sapelo2 work area (called scratch)
 # no need to copy set psi_scratch variable
 
-fermi = """module load Julia/1.8.2-linux-x86_64
-module load intel/2023a
+fermi = """module load Julia/1.11.6-gfbf-2023b
+module load intel/2023b
 
 julia {input_name} 
 
@@ -29,16 +29,13 @@ rm $PSI_SCRATCH -r
 # mpi only
 # set scratch dir to home area but run from submit_dir
 
-molpro_mpi = """module load intel/2023a
-
+molpro_mpi = """
 # to change scratch dir to use local machine scratch
 export SCRATCH_DIR=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
 export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
-molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
-
+singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
 
 """
@@ -46,22 +43,21 @@ rm $SCRATCH_DIR -r
 # mpi only
 # copy everything to lscratch to run and set scratch to lscratch
 
-molpro_mpi_lscratch = """module load intel/2023a
-
+molpro_mpi_lscratch = """
 # to change scratch dir to use local machine scratch
 export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
 export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
-molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+
+singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
 
 """
 
 orca_common = """#Set MPI Variables
-module load ORCA/5.0.4-gompi-2022a
+module load ORCA/6.1.0-OpenMPI-4.1.8-GCC-13.3.0-avx2
 export OMP_NUM_THREADS=1
 
 # Set other variables
@@ -79,12 +75,12 @@ echo " Running orca on `hostname`"
 echo " Running calculation..."
 
 cd $scratch_dir
-orca {input_name} >& $SLURM_SUBMIT_DIR/{output_name} || exit 1
+/apps/eb/ORCA/6.1.0-OpenMPI-4.1.8-GCC-13.3.0-avx2/bin/orca {input_name} >& $SLURM_SUBMIT_DIR/{output_name} || exit 1
 
 echo " Saving data and cleaning up..."
 # delete any temporary files that my be hanging around.
 rm -f *.tmp*
-find . -type f -size +50M -exec rm -f {} \;
+find . -type f -size +50M -exec rm -f {{}} \;
 tar --exclude='*tmp*' --transform "s,^,Job_Data_$SLURM_JOB_ID/," -vzcf $SLURM_SUBMIT_DIR/Job_Data_$SLURM_JOB_ID.tar.gz *
 
 echo " Job complete on `hostname`."
@@ -148,7 +144,7 @@ echo " Job complete on `hostname`."
 rm $scratch_dir -r
 """
 
-cfour_serial = """module=cfour/2.1-intel-2021b-serial
+cfour_serial = """module=cfour/2.1-intel-2023a-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
@@ -156,7 +152,7 @@ mkdir -p $scratch_dir
 
 """ + cfour_common
 
-cfour_serial_lscratch = """module=cfour/2.1-intel-2021b-serial
+cfour_serial_lscratch = """module=cfour/2.1-intel-2023a-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
@@ -164,7 +160,9 @@ mkdir -p $scratch_dir
 
 """ + cfour_common
 
-cfour_mpi = """module=cfour/2.1-intel-2021b-mpi
+cfour_mpi = """
+echo "Sapelo no longer has MPI CFOUR. Use the container version instead."
+module=cfour/2.1-intel-2023a-mpi
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
@@ -172,7 +170,9 @@ echo -e "\t$NSLOTS" > ./ncpu   # CFour appears to just claim any and all cpus
 echo -e "\t$NSLOTS" > $scratch_dir/ncpu
 """ + cfour_common
 
-cfour_mpi_lscratch = """module=cfour/2.1-intel-2021b-mpi
+cfour_mpi_lscratch = """
+echo "Sapelo no longer has MPI CFOUR. Use the container version instead."
+module=cfour/2.1-intel-2023a-mpi
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
