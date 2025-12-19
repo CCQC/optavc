@@ -35,8 +35,7 @@ export SCRATCH_DIR=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
 export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR \
--m $(($SLURM_MEM_PER_NODE/10/$NSLOTS))M # Divide by 10 so that it leaves room for extra variables. Word size is normally 8.
+singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
 
 """
@@ -50,8 +49,7 @@ export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
 export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 
-singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR \
--m $(($SLURM_MEM_PER_NODE/10/$NSLOTS))M # Divide by 10 so that it leaves room for extra variables. Word size is normally 8.
+singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
 
