@@ -29,13 +29,31 @@ rm $PSI_SCRATCH -r
 # mpi only
 # set scratch dir to home area but run from submit_dir
 
-molpro_mpi = """
+molpro_scratch_prefix = """
 # to change scratch dir to use local machine scratch
 export SCRATCH_DIR=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
 export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
+"""
 
-singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+molpro_lscratch_prefix = """
+# to change scratch dir to use local machine scratch
+export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
+mkdir -p $SCRATCH_DIR
+export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
+"""
+
+molpro = """module load intel/2022a
+mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
+molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+
+rm $SCRATCH_DIR -r
+
+"""
+
+molpro_24 = """
+singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat \
+--output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
 
 """
@@ -43,17 +61,10 @@ rm $SCRATCH_DIR -r
 # mpi only
 # copy everything to lscratch to run and set scratch to lscratch
 
-molpro_mpi_lscratch = """
-# to change scratch dir to use local machine scratch
-export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
-mkdir -p $SCRATCH_DIR
-export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
-
-singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
-
-rm $SCRATCH_DIR -r
-
-"""
+molpro_24_mpi = molpro_scratch_prefix + molpro_24
+molpro_24_mpi_lscratch = molpro_lscratch_prefix + molpro_24
+molpro_mpi = molpro_scratch_prefix + molpro
+molpro_mpi_lscratch = molpro_lscratch_prefix + molpro
 
 orca_common = """#Set MPI Variables
 module load ORCA/6.1.0-OpenMPI-4.1.8-GCC-13.3.0-avx2
@@ -196,11 +207,13 @@ progdict = {
         "lscratch": {
             "orca": orca_lscratch,
             "molpro": molpro_mpi_lscratch,
+            "molpro_24": molpro_24_mpi_lscratch,
             "cfour": cfour_mpi_lscratch
             },
         "scratch": {
             "orca": orca,
             "molpro": molpro_mpi,
+            "molpro_24": molpro_24_mpi,
             "cfour": cfour_mpi
             }
         }

@@ -58,6 +58,14 @@ class Options(object):
         The name should at least be sufficiently long to load the module with. i.e. cfour@2.0+mpi is sufficient for
         vulcan load psi4 is also sufficient isntead of psi4@master.
 
+        The naming convention is similar for Sapelo, however, most of the submit scripts are hardwired to specific versions.
+        Some submit scripts use the container in `/work/jttlab/containers,` some use the modules on Sapelo.
+        Again, the string should generally include the name and a version number. In general, for containers,
+        the name of the container should lead to the correct version being used.
+
+        optavc only uses the gapr containers for molpro. Edit the submit scripts to use soc.
+        For cfour requesting mpi will force use of the container but serial will use the module
+
     template_file_path : string
         default : 'template.dat'
 
@@ -459,6 +467,10 @@ class Options(object):
     @program.setter
     def program(self, val=""):
         prog = val.lower().split("@")
+        if len(prog) == 1:
+            # no @ in version string. try to split on -. This is needed for molpro if
+            # user provides the container name as the program.
+            prog = val.lower().split("-", 1)
         self._program = prog[0]
 
         if prog[0] == 'fermi':
@@ -470,9 +482,18 @@ class Options(object):
             elif prog[0] in ['orca', 'molpro']:
                 self.parallel = 'mpi'
 
+                if prog[0] == 'molpro' and '24' in prog[-1]:
+                    # molpro will be set above already change to molpro_24
+                    self._program = f"{prog[0]}_24"
+
         if not self.parallel:
-            if '+mpi' in prog[-1]:
+            if '+mpi' in prog[-1] or '-mpi' in prog[-1]:  # two common strings include +mpi or just name-mpi
                 self.parallel = 'mpi'
+
+                if prog[0] == 'molpro' and '24' in prog[-1]:
+                    # molpro will be set above already change to molpro_24
+                    self._program = f"{prog[0]}_24"
+
             elif 'serial' in prog[-1]:
                 self.parallel = 'serial'
             elif '~mpi' in prog[-1]:
