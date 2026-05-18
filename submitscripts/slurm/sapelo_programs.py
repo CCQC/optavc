@@ -106,7 +106,7 @@ orca_lscratch = """scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 """ + orca_common
 
-cfour_common = """
+cfour_prefix = """
 # make sure MRCC is around just in case
 export PATH=$PATH:/work/jttlab/mrcc/2020/
 prefix=/apps/eb/$module/
@@ -136,9 +136,9 @@ echo " Running cfour on `hostname`"
 echo " Running calculation..."
 
 cd $scratch_dir
-xcfour >& $SLURM_SUBMIT_DIR/{output_name}
-xja2fja
+"""
 
+cfour_suffix = """
 echo " Saving data and cleaning up..."
 if [ -e ZMATnew ]; then cp -f ZMATnew $SLURM_SUBMIT_DIR/ZMATnew ; fi
 if [ -e GRD ]; then cp -f GRD $SLURM_SUBMIT_DIR/GRD ; fi
@@ -154,13 +154,28 @@ echo " Job complete on `hostname`."
 rm $scratch_dir -r
 """
 
+xcfour_module = cfour_prefix + """
+xcfour >& $SLURM_SUBMIT_DIR/{output_name}
+xja2fja
+""" + cfour_suffix
+
+xcfour_container = cfour_prefix + """
+# Silence all the IEEE signaling messages
+export NO_STOP_MESSAGE=yes
+# request devices (inifiniband) use openib BTL interface for openmpi 4
+export OMPI_MCA_btl_openib_allow_ib=true
+
+apptainer exec /work/jttlab/containers/cfour-2.1-foss-ompi.sif xcfour >& $SLURM_SUBMIT_DIR/{output_name}
+apptainer exec /work/jttlab/containers/cfour-2.1-foss-ompi.sif xja2fja
+""" + cfour_suffix
+
 cfour_serial = """module=cfour/2.1-intel-2023a-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
-""" + cfour_common
+""" + xcfour_module
 
 cfour_serial_lscratch = """module=cfour/2.1-intel-2023a-serial
 export OMP_NUM_THREADS=$NSLOTS
@@ -168,27 +183,23 @@ export OMP_NUM_THREADS=$NSLOTS
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
-""" + cfour_common
+""" + xcfour_module
 
-cfour_mpi = """
-echo "Sapelo no longer has MPI CFOUR. Use the container version instead."
-module=cfour/2.1-intel-2023a-mpi
+cfour_mpi = """module=OpenMPI/4.1.1-GCC-11.2.0 # no cfour mpi by gacrc
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
 echo -e "\t$NSLOTS" > ./ncpu   # CFour appears to just claim any and all cpus
 echo -e "\t$NSLOTS" > $scratch_dir/ncpu
-""" + cfour_common
+""" + xcfour_container
 
-cfour_mpi_lscratch = """
-echo "Sapelo no longer has MPI CFOUR. Use the container version instead."
-module=cfour/2.1-intel-2023a-mpi
+cfour_mpi_lscratch = """module=OpenMPI/4.1.1-GCC-11.2.0 # no cfour mpi by gacrc
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
 echo -e "\t$NSLOTS" > ./ncpu   # CFour appears to just claim any and all cpus
 echo -e "\t$NSLOTS" > $scratch_dir/ncpu
-""" + cfour_common
+""" + xcfour_container
 
 progdict = {
     "serial": {
