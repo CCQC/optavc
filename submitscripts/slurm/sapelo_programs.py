@@ -44,7 +44,7 @@ export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directo
 """
 
 molpro = """module load intel/2022a
-mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
+mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro-2021-gapr.sif \
 molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
@@ -52,7 +52,7 @@ rm $SCRATCH_DIR -r
 """
 
 molpro_24 = """
-singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr.sif -n $NSLOTS input.dat \
+singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr-v3.sif -n $NSLOTS input.dat \
 --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
 
