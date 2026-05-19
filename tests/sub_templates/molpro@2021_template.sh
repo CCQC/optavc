@@ -21,7 +21,7 @@ export SCRATCH_DIR=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
 export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
 module load intel/2022a
-mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro-2021-gapr.sif molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
 

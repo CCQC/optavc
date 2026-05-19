@@ -52,7 +52,7 @@ rm $SCRATCH_DIR -r
 """
 
 molpro_24 = """
-singularity run /work/jttlab/containers/molpro-2024.1.1-mpi-gapr-v3.sif -n $NSLOTS input.dat \
+singularity run /work/jttlab/containers/molpro-2024-gapr.sif -n $NSLOTS input.dat \
 --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
 
