@@ -1,4 +1,4 @@
-# use sapelo2 work area (called scratch)
+#  use sapelo2 work area (called scratch)
 # no need to copy set psi_scratch variable
 
 fermi = """module load Julia/1.11.6-gfbf-2023b
@@ -44,7 +44,7 @@ export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directo
 """
 
 molpro = """module load intel/2022a
-mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro-2021-gapr.sif \
+mpirun -n $NSLOTS apptainer exec /work/hfslab/containers/molpro-2021-gapr.sif \
 molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
 rm $SCRATCH_DIR -r
@@ -52,7 +52,7 @@ rm $SCRATCH_DIR -r
 """
 
 molpro_24 = """
-singularity run /work/jttlab/containers/molpro-2024-gapr.sif -n $NSLOTS input.dat \
+singularity run /work/hfslab/containers/molpro-2024-gapr.sif -n $NSLOTS input.dat \
 --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
 
@@ -108,7 +108,7 @@ mkdir -p $scratch_dir
 
 cfour_prefix = """
 # make sure MRCC is around just in case
-export PATH=$PATH:/work/jttlab/mrcc/2020/
+export PATH=$PATH:/work/hfslab/mrcc/2020/
 prefix=/apps/eb/$module/
 module load $module
 
@@ -165,8 +165,8 @@ export NO_STOP_MESSAGE=yes
 # request devices (inifiniband) use openib BTL interface for openmpi 4
 export OMPI_MCA_btl_openib_allow_ib=true
 
-apptainer exec /work/jttlab/containers/cfour-2.1-foss-ompi.sif xcfour >& $SLURM_SUBMIT_DIR/{output_name}
-apptainer exec /work/jttlab/containers/cfour-2.1-foss-ompi.sif xja2fja
+apptainer exec /work/hfslab/containers/cfour-2.1-foss-ompi.sif xcfour >& $SLURM_SUBMIT_DIR/{output_name}
+apptainer exec /work/hfslab/containers/cfour-2.1-foss-ompi.sif xja2fja
 """ + cfour_suffix
 
 cfour_serial = """module=cfour/2.1-intel-2023a-serial

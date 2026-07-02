@@ -132,7 +132,7 @@ sapelo_old = """
     Resource_List.nodect = 1
     session_id = 132984
     Shell_Path_List = /bin/bash
-    Variable_List = MOAB_BATCH=,MOAB_CLASS=batch,MOAB_GROUP=jttlab,
+    Variable_List = MOAB_BATCH=,MOAB_CLASS=batch,MOAB_GROUP=hfslab,
     MOAB_JOBID=3292573,MOAB_JOBNAME=optavc_test--04-2,
     MOAB_MACHINE=dispatch,MOAB_NODECOUNT=1,MOAB_NODELIST=n220,
     MOAB_PARTITION=Moab_Sapelo2,MOAB_PROCCOUNT=4,
@@ -151,7 +151,7 @@ sapelo_old = """
     PBS_O_WORKDIR=/home/agh66737/mjolnir_local/optavc/tests/STEP04/2,
     PBS_O_HOST=sapelo2-sub2.ecompute,PBS_O_SERVER=dispatch.ecompute
     euser = agh66737
-    egroup = jttlab
+    egroup = hfslab
     queue_type = E
     etime = Tue Sep 22 09:49:29 2020
     exit_status = 0
