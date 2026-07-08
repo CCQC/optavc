@@ -53,7 +53,7 @@ rm $SCRATCH_DIR -r
 
 molpro_24 = """
 singularity run /work/hfslab/containers/molpro-2024-gapr.sif -n $NSLOTS input.dat \
---output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
+--output output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
 
 """
