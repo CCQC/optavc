@@ -150,7 +150,7 @@ def final_hess_printout(hess_obj, options):
     
     psi4.core.print_out("\nThe final computed hessian is:\n\n")        
     psi4_mol_obj = hess_obj.molecule.cast_to_psi4_molecule_object(fix_com=options.fix_com, fix_orientation=options.fix_orientation)
-    wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'def2-tzvp')
+    wfn = psi4.core.Wavefunction.build(psi4_mol_obj, 'sap_helfem_small')
     wfn.set_hessian(psi4.core.Matrix.from_array(hess_obj.result))
     wfn.set_energy(hess_obj.energy)
     psi4.core.set_variable("CURRENT ENERGY", hess_obj.energy)
