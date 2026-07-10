@@ -10,6 +10,7 @@ julia {input_name}
 
 psi4 = """export PSI_SCRATCH=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $PSI_SCRATCH
+export PATH=$PATH:/work/hfslab/mrcc/2020
 psi4 -n $NSLOTS
 rm $PSI_SCRATCH -r
 """
@@ -18,8 +19,9 @@ rm $PSI_SCRATCH -r
 # run from lscratch
 # tar and copy back
 
-psi4_lscratch = """export PSI_SCRATCH=/scratch/$USER/tmp/$SLURM_JOB_ID
+psi4_lscratch = """export PSI_SCRATCH=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $PSI_SCRATCH
+export PATH=$PATH:/work/hfslab/mrcc/2020
 
 psi4 {input_name} -n $NSLOTS --output {output_name}
 
@@ -44,6 +46,7 @@ export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directo
 """
 
 molpro = """module load intel/2022a
+export PATH=$PATH:/work/hfslab/mrcc/2020
 mpirun -n $NSLOTS apptainer exec /work/hfslab/containers/molpro-2021-gapr.sif \
 molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
@@ -52,6 +55,7 @@ rm $SCRATCH_DIR -r
 """
 
 molpro_24 = """
+export PATH=$PATH:/work/hfslab/mrcc/2020
 singularity run /work/hfslab/containers/molpro-2024-gapr.sif -n $NSLOTS input.dat \
 --output output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
