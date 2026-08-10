@@ -1,8 +1,8 @@
-# use sapelo2 work area (called scratch)
+#  use sapelo2 work area (called scratch)
 # no need to copy set psi_scratch variable
 
-fermi = """module load Julia/1.8.2-linux-x86_64
-module load intel/2023a
+fermi = """module load Julia/1.11.6-gfbf-2023b
+module load intel/2023b
 
 julia {input_name} 
 
@@ -10,6 +10,7 @@ julia {input_name}
 
 psi4 = """export PSI_SCRATCH=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $PSI_SCRATCH
+export PATH=$PATH:/work/hfslab/mrcc/2020
 psi4 -n $NSLOTS
 rm $PSI_SCRATCH -r
 """
@@ -18,8 +19,9 @@ rm $PSI_SCRATCH -r
 # run from lscratch
 # tar and copy back
 
-psi4_lscratch = """export PSI_SCRATCH=/scratch/$USER/tmp/$SLURM_JOB_ID
+psi4_lscratch = """export PSI_SCRATCH=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $PSI_SCRATCH
+export PATH=$PATH:/work/hfslab/mrcc/2020
 
 psi4 {input_name} -n $NSLOTS --output {output_name}
 
@@ -29,16 +31,33 @@ rm $PSI_SCRATCH -r
 # mpi only
 # set scratch dir to home area but run from submit_dir
 
-molpro_mpi = """module load intel/2023a
-
+molpro_scratch_prefix = """
 # to change scratch dir to use local machine scratch
 export SCRATCH_DIR=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $SCRATCH_DIR
 export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
+"""
 
-mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
+molpro_lscratch_prefix = """
+# to change scratch dir to use local machine scratch
+export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
+mkdir -p $SCRATCH_DIR
+export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
+"""
+
+molpro = """module load intel/2022a
+export PATH=$PATH:/work/hfslab/mrcc/2020
+mpirun -n $NSLOTS apptainer exec /work/hfslab/containers/molpro-2021-gapr.sif \
 molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
 
+rm $SCRATCH_DIR -r
+
+"""
+
+molpro_24 = """
+export PATH=$PATH:/work/hfslab/mrcc/2020
+singularity run /work/hfslab/containers/molpro-2024-gapr.sif -n $NSLOTS input.dat \
+--output output.dat --nouse-logfile --directory $SCRATCH_DIR
 rm $SCRATCH_DIR -r
 
 """
@@ -46,22 +65,13 @@ rm $SCRATCH_DIR -r
 # mpi only
 # copy everything to lscratch to run and set scratch to lscratch
 
-molpro_mpi_lscratch = """module load intel/2023a
-
-# to change scratch dir to use local machine scratch
-export SCRATCH_DIR=/lscratch/$USER/tmp/$SLURM_JOB_ID
-mkdir -p $SCRATCH_DIR
-export APPTAINER_BIND="$SLURM_SUBMIT_DIR,$SCRATCH_DIR"  # This binds the directory into the container so that output can be written.
-
-mpirun -n $NSLOTS apptainer exec /work/jttlab/containers/molpro_mpipr.sif \
-molpro.exe input.dat --output $SLURM_SUBMIT_DIR/output.dat --nouse-logfile --directory $SCRATCH_DIR
-
-rm $SCRATCH_DIR -r
-
-"""
+molpro_24_mpi = molpro_scratch_prefix + molpro_24
+molpro_24_mpi_lscratch = molpro_lscratch_prefix + molpro_24
+molpro_mpi = molpro_scratch_prefix + molpro
+molpro_mpi_lscratch = molpro_lscratch_prefix + molpro
 
 orca_common = """#Set MPI Variables
-module load ORCA/5.0.4-gompi-2022a
+module load ORCA/6.1.0-OpenMPI-4.1.8-GCC-13.3.0-avx2
 export OMP_NUM_THREADS=1
 
 # Set other variables
@@ -79,12 +89,12 @@ echo " Running orca on `hostname`"
 echo " Running calculation..."
 
 cd $scratch_dir
-orca {input_name} >& $SLURM_SUBMIT_DIR/{output_name} || exit 1
+/apps/eb/ORCA/6.1.0-OpenMPI-4.1.8-GCC-13.3.0-avx2/bin/orca {input_name} >& $SLURM_SUBMIT_DIR/{output_name} || exit 1
 
 echo " Saving data and cleaning up..."
 # delete any temporary files that my be hanging around.
 rm -f *.tmp*
-find . -type f -size +50M -exec rm -f {} \;
+find . -type f -size +50M -exec rm -f {{}} \;
 tar --exclude='*tmp*' --transform "s,^,Job_Data_$SLURM_JOB_ID/," -vzcf $SLURM_SUBMIT_DIR/Job_Data_$SLURM_JOB_ID.tar.gz *
 
 echo " Job complete on `hostname`."
@@ -100,9 +110,9 @@ orca_lscratch = """scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 """ + orca_common
 
-cfour_common = """
+cfour_prefix = """
 # make sure MRCC is around just in case
-export PATH=$PATH:/work/jttlab/mrcc/2020/
+export PATH=$PATH:/work/hfslab/mrcc/2020/
 prefix=/apps/eb/$module/
 module load $module
 
@@ -130,9 +140,9 @@ echo " Running cfour on `hostname`"
 echo " Running calculation..."
 
 cd $scratch_dir
-xcfour >& $SLURM_SUBMIT_DIR/{output_name}
-xja2fja
+"""
 
+cfour_suffix = """
 echo " Saving data and cleaning up..."
 if [ -e ZMATnew ]; then cp -f ZMATnew $SLURM_SUBMIT_DIR/ZMATnew ; fi
 if [ -e GRD ]; then cp -f GRD $SLURM_SUBMIT_DIR/GRD ; fi
@@ -148,37 +158,52 @@ echo " Job complete on `hostname`."
 rm $scratch_dir -r
 """
 
-cfour_serial = """module=cfour/2.1-intel-2021b-serial
+xcfour_module = cfour_prefix + """
+xcfour >& $SLURM_SUBMIT_DIR/{output_name}
+xja2fja
+""" + cfour_suffix
+
+xcfour_container = cfour_prefix + """
+# Silence all the IEEE signaling messages
+export NO_STOP_MESSAGE=yes
+# request devices (inifiniband) use openib BTL interface for openmpi 4
+export OMPI_MCA_btl_openib_allow_ib=true
+
+apptainer exec /work/hfslab/containers/cfour-2.1-foss-ompi.sif xcfour >& $SLURM_SUBMIT_DIR/{output_name}
+apptainer exec /work/hfslab/containers/cfour-2.1-foss-ompi.sif xja2fja
+""" + cfour_suffix
+
+cfour_serial = """module=cfour/2.1-intel-2023a-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
-""" + cfour_common
+""" + xcfour_module
 
-cfour_serial_lscratch = """module=cfour/2.1-intel-2021b-serial
+cfour_serial_lscratch = """module=cfour/2.1-intel-2023a-serial
 export OMP_NUM_THREADS=$NSLOTS
 
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
-""" + cfour_common
+""" + xcfour_module
 
-cfour_mpi = """module=cfour/2.1-intel-2021b-mpi
+cfour_mpi = """module=OpenMPI/4.1.1-GCC-11.2.0 # no cfour mpi by gacrc
 scratch_dir=/scratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
 echo -e "\t$NSLOTS" > ./ncpu   # CFour appears to just claim any and all cpus
 echo -e "\t$NSLOTS" > $scratch_dir/ncpu
-""" + cfour_common
+""" + xcfour_container
 
-cfour_mpi_lscratch = """module=cfour/2.1-intel-2021b-mpi
+cfour_mpi_lscratch = """module=OpenMPI/4.1.1-GCC-11.2.0 # no cfour mpi by gacrc
 scratch_dir=/lscratch/$USER/tmp/$SLURM_JOB_ID
 mkdir -p $scratch_dir
 
 echo -e "\t$NSLOTS" > ./ncpu   # CFour appears to just claim any and all cpus
 echo -e "\t$NSLOTS" > $scratch_dir/ncpu
-""" + cfour_common
+""" + xcfour_container
 
 progdict = {
     "serial": {
@@ -197,11 +222,13 @@ progdict = {
         "lscratch": {
             "orca": orca_lscratch,
             "molpro": molpro_mpi_lscratch,
+            "molpro_24": molpro_24_mpi_lscratch,
             "cfour": cfour_mpi_lscratch
             },
         "scratch": {
             "orca": orca,
             "molpro": molpro_mpi,
+            "molpro_24": molpro_24_mpi,
             "cfour": cfour_mpi
             }
         }
